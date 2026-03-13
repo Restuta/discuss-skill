@@ -1,168 +1,219 @@
 # discuss-skill
 
-Structured multi-AI discussions that reach consensus or clearly identify where they can't.
+Make two AIs argue about your problem so you get a better answer.
 
-Two AI agents independently research a topic, debate it with structured turns, and produce a human-scannable summary with contention points and resolution paths. Works across AI tools (Claude Code, Codex, others) using a shared protocol.
+Instead of asking one AI and hoping it's right, `discuss-skill` creates a structured debate between two AI agents. They independently research the topic from opposing angles, challenge each other's reasoning, and produce a clear summary showing what they agreed on, what they fought about, and how they resolved it.
 
-## Why
+The output is a single markdown file you can read, share, or commit to your repo.
 
-Single-model outputs have blind spots. Two agents debating a topic:
-- Catch each other's errors and hallucinations
-- Surface hidden assumptions
-- Produce higher-confidence outputs through structured disagreement
-- Leave an auditable trail of how decisions were reached
+## What it looks like
 
-## Quick Start
+Here's the end of a real discussion — the part you actually read:
 
-### Install (Claude Code)
+```markdown
+## Consensus Summary
 
+### Decision
+Use a simple append-only table with JSON payload column for the audit log
+at launch. Design for future event sourcing migration but don't implement
+it now.
+
+### Key Contention Points
+
+| # | What We Disagreed On         | How It Was Resolved                      | Who Shifted & Why                   |
+|----|------------------------------|------------------------------------------|--------------------------------------|
+| 1  | Event sourcing vs. table     | Reframed: depends on multi-consumer need | Codex shifted — no consumers yet     |
+| 2  | Event fidelity preservation  | JSON payload column solves it            | Both converged independently         |
+| 3  | Migration path documentation | Fast follow, not launch blocker          | Claude proposed, Codex agreed        |
+
+### Confidence: High
+Both agents converged from opposite starting positions.
+```
+
+Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](examples/deadlock-example.md)
+
+## How to use it
+
+### With Claude Code
+
+Install:
 ```bash
-git clone https://github.com/YOUR_ORG/discuss-skill-claude.git
+git clone https://github.com/Restuta/discuss-skill-claude.git
 cd discuss-skill-claude
 bash install.sh
 ```
 
-This copies the `/discuss` command to `~/.claude/commands/`. Then in any Claude Code session:
+Then in any Claude Code session, one command:
 
 ```
 /user:discuss "Should we use event sourcing for the audit log?" audit-log.md
 ```
 
-### Install (Codex)
+That's it. It creates the file, does its research, and waits for another AI to join.
 
-Point Codex to `adapters/codex/AGENTS.md` in this repo. It will follow the protocol.
+Three modes:
 
-### Manual Install
+| What you type | What happens |
+|---|---|
+| `/user:discuss "topic" file.md` | **External** (default) — creates file, you contribute as one side, another AI joins as the other |
+| `/user:discuss "topic" file.md --mode council` | **Council** — spawns two internal agents that debate and produce a result automatically |
+| `/user:discuss file.md` | **Join** — joins an existing discussion that another AI started |
 
-```bash
-mkdir -p ~/.claude/commands
-cp adapters/claude/.claude/commands/discuss.md ~/.claude/commands/
+### With OpenAI Codex
+
+No installer needed. Point Codex to `adapters/codex/AGENTS.md` in this repo and tell it to join the discussion file. It reads the protocol and follows it.
+
+### With any other AI
+
+Any AI that can read and write markdown files can participate. Point it at `protocol/discuss-protocol-v1.md` and the discussion file. The protocol is self-contained — the AI reads the rules and follows them.
+
+### Cross-model discussions (the interesting part)
+
+This is where it gets good. Run different models against each other:
+
+**Window 1 (Claude Code):**
+```
+/user:discuss "Should we rewrite auth in Rust?" auth-rewrite.md
 ```
 
-## Usage
+**Window 2 (Codex, or another Claude, or anything):**
+Point it to `auth-rewrite.md` and tell it to join. Both AIs take turns in the same file.
 
-One command, three modes:
+The file is the protocol. Turn-taking, state, and history are all in the markdown. No server, no coordination layer, just a shared file.
 
-```
-/user:discuss "topic" file.md                  → external (default)
-/user:discuss "topic" file.md --mode council   → council
-/user:discuss file.md                          → join existing
-```
+## How it works
 
-### External Mode (default) — discuss with a different AI
+1. **Blind research.** Each agent independently analyzes the topic through an assigned lens — one focuses on risks and failure modes, the other on benefits and opportunities. They don't see each other's work.
+2. **Structured debate.** Agents take turns responding. Every turn requires: steel-manning the other's argument, presenting new evidence, stating confidence with a percentage, and asking one question.
+3. **Convergence.** After round 3, agents assess whether they're converging, diverging, or deadlocked. At round 7 (configurable), they must synthesize or declare deadlock.
+4. **Summary.** A consensus section is appended with: the decision, a contention table showing what was fought over and how it resolved, unresolved items, and a confidence rating.
 
-Creates a discussion file and contributes as Agent A. Waits for another AI to join as Agent B.
-
-```
-/user:discuss "Should we migrate to GraphQL?" api-discussion.md
-```
-
-Output:
-```
-Starting external discussion on: "Should we migrate to GraphQL?"
-Created: api-discussion.md
-Mode: external — waiting for another AI to join
-
-Next steps:
-1. Open another AI (Codex, another Claude window, etc.)
-2. Point it to api-discussion.md and tell it to join the discussion
-3. This session will watch for changes and take turns automatically
-```
-
-Then in the other AI:
-```
-/user:discuss api-discussion.md
-```
-
-### Council Mode — internal subagent debate
-
-Spawns two internal agents with opposing lenses. Runs to completion automatically.
-
-```
-/user:discuss "Tabs or spaces for the new project?" code-style.md --mode council
-```
-
-Output:
-```
-Starting council discussion on: "Tabs or spaces for the new project?"
-Mode: council — two internal agents will debate this
-Output: code-style.md
-Running...
-```
-
-### Join Mode — join an existing discussion
-
-```
-/user:discuss existing-discussion.md
-```
-
-Output:
-```
-Joining discussion: "Should we migrate to GraphQL?"
-You are: Agent B
-Current round: 1
-Status: researching
-```
-
-## What You Get
-
-A single markdown file containing:
-
-1. **Independent research** from each agent (different analytical lenses — one skeptic, one advocate)
-2. **Structured debate** with steel-manning, evidence, and calibrated confidence percentages
-3. **Consensus summary** with:
-   - The decision (2-3 sentences)
-   - Contention table: what was disagreed on, how it was resolved, who shifted and why
-   - Unresolved items and risks
-   - Confidence rating (High / Medium / Low)
-
-See [examples/full-discussion.md](examples/full-discussion.md) for a complete consensus example, and [examples/deadlock-example.md](examples/deadlock-example.md) for a productive deadlock.
+The whole thing lives in one append-only markdown file. No database, no server, no special runtime.
 
 ## Configuration
 
-All settings live in the discussion file's YAML frontmatter:
+Settings live in the discussion file's frontmatter. Override per-discussion:
 
 | Setting | Default | Options |
 |---------|---------|---------|
-| `blind_briefs` | `true` | `true`, `false` |
-| `max_rounds` | `7` | `1`-`15` |
+| `blind_briefs` | `true` | Skip research phase with `false` for lightweight questions |
+| `max_rounds` | `7` | `1`-`15` — more rounds for complex topics |
 | `git_commit` | `final_only` | `none`, `final_only`, `every_turn` |
 
-## Human Participation
+## You can join too
 
-You can join any discussion as a third participant:
+Humans are first-class participants. Edit the file directly:
 
-1. Edit the discussion file directly
-2. Add a `### Human Interjection | human-note` section
-3. Set `turn:` in the frontmatter to the next agent
+1. Add a `### Human Interjection | human-note` section anywhere
+2. Set `turn:` in the frontmatter to the next agent
 
-Humans can add constraints, inject missing context, break ties, or redirect the discussion.
+Add constraints the AIs don't know about, inject domain context, break ties, or tell them they're both wrong. The triadic structure (two AIs + one human) is often the most productive.
 
-## Protocol
+## Why this exists
 
-The full protocol specification is at [protocol/discuss-protocol-v1.md](protocol/discuss-protocol-v1.md). This is the source of truth — adapters are thin wrappers around it.
+We built this because we kept asking one AI for advice and getting plausible-sounding answers with hidden blind spots. Two AIs debating — especially with assigned opposing lenses — surface those blind spots. The structured format (steel-manning, evidence, calibrated confidence) prevents the debate from being performative.
 
-Any AI that can read markdown and append to a file can participate by following the protocol. No special tooling needed.
+This spec was itself designed through a [Claude + Codex discussion](https://github.com/Restuta/discuss-skill-claude/blob/main/examples/full-discussion.md). The process validated the protocol.
 
-## Architecture
+Based on research showing multi-agent debate improves factual accuracy and reasoning quality (Du et al. 2023, "Improving Factuality and Reasoning in Language Models through Multiagent Debate").
+
+## Project structure
 
 ```
 discuss-skill-claude/
-├── protocol/                      # THE product — the shared spec
-│   └── discuss-protocol-v1.md
-├── adapters/                      # Thin host-specific wrappers
+├── protocol/
+│   └── discuss-protocol-v1.md     # The protocol spec — source of truth
+├── adapters/
 │   ├── claude/.claude/commands/
-│   │   └── discuss.md             # All modes: external, council, join
+│   │   └── discuss.md             # Claude Code skill (all modes)
 │   └── codex/
 │       └── AGENTS.md              # Codex instruction file
 ├── examples/
-│   ├── full-discussion.md         # Consensus example
+│   ├── full-discussion.md         # Complete consensus example
 │   └── deadlock-example.md        # Productive deadlock example
 ├── PRODUCT.md                     # Design decisions & roadmap
-└── install.sh
+├── install.sh                     # One-command setup for Claude Code
+└── LICENSE                        # MIT
 ```
 
-Design principle: the protocol document is the product. Adapters are boring glue. If a new AI tool appears tomorrow, it can participate by reading the protocol doc — no code changes needed.
+The protocol document is the product. Adapters are boring glue. If a new AI tool appears tomorrow, it participates by reading the protocol — no code changes needed.
+
+---
+
+## For AI Agents
+
+If you are an AI agent being asked to participate in a discussion using this skill, read this section.
+
+### Quick orientation
+
+1. Read `protocol/discuss-protocol-v1.md` — it contains all the rules you need to follow
+2. The discussion file (the `.md` file the user pointed you to) contains the current state in YAML frontmatter and the full conversation history in the body
+3. You are append-only — never delete or rewrite earlier entries
+
+### Joining a discussion
+
+1. Read the discussion file
+2. Check the `agent_a` and `agent_b` fields in frontmatter — claim the first unassigned slot
+3. Check `status` and `turn` to know what to do:
+   - `status: researching` + your turn → write your blind research using your assigned lens
+   - `status: discussing` + your turn → write a structured response (steel-man, evidence, confidence, question)
+   - `status: discussing` + not your turn → wait and poll the file for changes
+   - `status: consensus` or `deadlock` → discussion is over, display the summary
+4. After writing, update `turn` to the next participant and `last_updated`
+
+### Response format
+
+Every discussion turn must use this heading and structure:
+
+```markdown
+### Round N — YourName | response | confidence: X%
+
+**Response to previous point:**
+Steel-man their argument, then agree/disagree/synthesize.
+
+**New evidence or angle:**
+Something not yet discussed. If nothing new, say so.
+
+**Current position:**
+Updated position with confidence % and justification.
+
+**Question for [other participant]:**
+One specific question to resolve disagreement.
+```
+
+### Key rules
+
+- **Steel-man first** — restate the other's argument in its strongest form before responding
+- **Evidence over assertion** — ground claims in specifics
+- **Calibrated confidence** — use percentages, not vague hedging
+- **Change your mind visibly** — say what shifted and why
+- **Stay scoped** — flag tangents as `[PARKING LOT]`, don't chase them
+- **Round 3+** — end with convergence assessment: `CONVERGING / PARALLEL / DIVERGING / DEADLOCKED`
+- **Round > max_rounds** — you must write a `consensus` entry, no more responses allowed
+
+### Consensus format
+
+```markdown
+## Consensus Summary
+
+### Decision
+[2-3 sentences]
+
+### Key Contention Points
+| # | What We Disagreed On | How It Was Resolved | Who Shifted & Why |
+|---|---------------------|--------------------|--------------------|
+| 1 | ... | ... | ... |
+
+### Unresolved Items & Risks
+- ...
+
+### Confidence: [High | Medium | Low]
+[1 sentence justification]
+```
+
+### Full protocol
+
+Read `protocol/discuss-protocol-v1.md` for the complete specification including file format, entry types, git behavior, and synchronization rules.
 
 ## License
 
