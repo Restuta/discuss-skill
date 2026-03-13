@@ -167,6 +167,8 @@ last_updated: <ISO 8601 timestamp>
 3. ...
 ```
 
+The orchestrator MUST generate the Key Questions from the topic when creating the discussion file.
+
 ### Phase 1: Blind Research
 
 If `blind_briefs: false`, skip this phase entirely. Set `status: discussing`, `round: 1`, `turn: A` and proceed to Phase 2.

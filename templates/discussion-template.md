@@ -1,12 +1,3 @@
-# Discussion Template
-
-This is the canonical template for a discuss-skill discussion file. Adapters generate this structure automatically; this file exists as a reference for humans and for AIs that aren't using a host-specific adapter.
-
-See [protocol/discuss-protocol-v1.md](../protocol/discuss-protocol-v1.md) for the full rules.
-
----
-
-```markdown
 ---
 topic: "{{TOPIC}}"
 mode: external
@@ -88,23 +79,3 @@ One specific question to resolve remaining disagreement.
 
 ### Confidence: [High | Medium | Low]
 [1 sentence justification]
-```
-
-## Field Reference
-
-| Field | Required | Default | Notes |
-|-------|----------|---------|-------|
-| `topic` | yes | — | The question being discussed |
-| `mode` | no | `external` | `external` or `council` |
-| `blind_briefs` | no | `true` | Skip research phase with `false` |
-| `max_rounds` | no | `7` | Range 1-15 |
-| `git_commit` | no | `final_only` | `none`, `final_only`, `every_turn` |
-| `agent_a` | yes | — | First participant name |
-| `agent_b` | yes | `"unassigned"` | Second participant (claimed on join) |
-| `agent_a_lens` | no | `"risk/cost/failure"` | Analytical lens for Agent A |
-| `agent_b_lens` | no | `"value/opportunity/success"` | Analytical lens for Agent B |
-| `status` | yes | `researching` | `researching`, `discussing`, `consensus`, `deadlock` |
-| `turn` | yes | `A` | `A`, `B`, or `human` |
-| `round` | yes | `0` | Current round; 0 during research |
-| `created` | yes | — | ISO 8601 timestamp |
-| `last_updated` | yes | — | ISO 8601 timestamp |
