@@ -52,7 +52,7 @@ last_updated: 2026-03-13T10:15:00Z
 - `agent_a_lens`, `agent_b_lens`: analytical perspectives assigned to each agent
 
 **Claim-once fields** may be written once when a participant joins, then never modified:
-- `agent_a`, `agent_b`: participant names/identifiers. Initialized as `"unassigned"` in external mode and claimed by joining participants (see 6.3).
+- `agent_a`, `agent_b`: participant names/identifiers. The initiator sets `agent_a` to their own name at creation. In external mode, `agent_b` starts as `"unassigned"` and is claimed by the joining participant (see 6.3). In council mode, the orchestrator sets both at creation.
 
 **State fields** are updated each turn:
 - `status`: `researching | discussing | consensus | deadlock`

@@ -30,7 +30,7 @@ Source: [ReConcile: Round-Table Conference Improves Reasoning via Consensus amon
 
 ### Divergent thinking through multi-agent debate
 
-Liang et al. (EMNLP 2024) found that LLMs suffer from "Degeneration-of-Thought" in self-reflection -- multi-agent debate overcomes it. GPT-3.5 with debate surpassed GPT-4 on commonsense translation.
+Liang et al. (EMNLP 2024) found that LLMs suffer from "Degeneration-of-Thought" in self-reflection —multi-agent debate overcomes it. GPT-3.5 with debate surpassed GPT-4 on commonsense translation.
 
 Source: [Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate](https://arxiv.org/abs/2305.19118)
 
@@ -48,7 +48,7 @@ Source: [Debate Only When Necessary: Adaptive Multiagent Collaboration for Effic
 
 ## Caveat
 
-A [2025 ICLR analysis](https://d2jud02ci9yv69.cloudfront.net/2025-04-28-mad-159/blog/mad/) noted that multi-agent debate doesn't consistently outperform simpler methods like chain-of-thought on all benchmarks. The benefits are most pronounced on tasks requiring diverse perspectives, factual verification, and structured reasoning -- which is exactly what this tool targets.
+A [2025 ICLR analysis](https://d2jud02ci9yv69.cloudfront.net/2025-04-28-mad-159/blog/mad/) noted that multi-agent debate doesn't consistently outperform simpler methods like chain-of-thought on all benchmarks. The benefits are most pronounced on tasks requiring diverse perspectives, factual verification, and structured reasoning —which is exactly what this tool targets.
 
 ## Practical Takeaway
 

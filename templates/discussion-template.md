@@ -18,7 +18,7 @@ last_updated: {{ISO_8601_TIMESTAMP}}
 # Discussion: {{TOPIC}}
 
 ## Key Questions
-1. {{Generated from the topic — 2-3 specific sub-questions to resolve}}
+1. [Generated from the topic — 2-3 specific sub-questions to resolve]
 2. ...
 3. ...
 
@@ -45,7 +45,7 @@ last_updated: {{ISO_8601_TIMESTAMP}}
 
 ## Discussion
 
-### Round 1 — {{Agent A Name}} | response | confidence: X%
+### Round 1 — {{AGENT_A_NAME}} | response | confidence: X%
 
 **Response to previous point:**
 Steel-man their argument, then agree, disagree, or synthesize.
@@ -56,7 +56,7 @@ Something not yet discussed.
 **Current position:**
 Where you stand now, confidence %, brief justification.
 
-**Question for {{Agent B Name}}:**
+**Question for {{AGENT_B_NAME}}:**
 One specific question to resolve remaining disagreement.
 
 <!-- Rounds continue until consensus or max_rounds -->
