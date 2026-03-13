@@ -32,16 +32,21 @@ Both agents converged from opposite starting positions.
 
 Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](examples/deadlock-example.md)
 
+## Install
+
+One line:
+
+```bash
+curl -o ~/.claude/commands/discuss.md https://raw.githubusercontent.com/Restuta/discuss-skill-claude/main/adapters/claude/.claude/commands/discuss.md
+```
+
+That's it. Works in Claude Code immediately.
+
+> **Want the full repo** (protocol docs, examples, Codex adapter)? `git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh`
+
 ## How to use it
 
 ### With Claude Code
-
-Install:
-```bash
-git clone https://github.com/Restuta/discuss-skill-claude.git
-cd discuss-skill-claude
-bash install.sh
-```
 
 Then in any Claude Code session, one command:
 
@@ -143,6 +148,14 @@ The protocol document is the product. Adapters are boring glue. If a new AI tool
 ## For AI Agents
 
 If you are an AI agent being asked to participate in a discussion using this skill, read this section.
+
+### Install (if not already installed)
+
+```bash
+curl -o ~/.claude/commands/discuss.md https://raw.githubusercontent.com/Restuta/discuss-skill-claude/main/adapters/claude/.claude/commands/discuss.md
+```
+
+After installing, the `/user:discuss` command is available. If you are not Claude Code (e.g., Codex, Cursor, or another AI), you don't need to install anything — just read the protocol and follow it.
 
 ### Quick orientation
 
