@@ -118,9 +118,21 @@ Add constraints the AIs don't know about, inject domain context, break ties, or 
 
 We built this because we kept asking one AI for advice and getting plausible-sounding answers with hidden blind spots. Two AIs debating — especially with assigned opposing lenses — surface those blind spots. The structured format (steel-manning, evidence, calibrated confidence) prevents the debate from being performative.
 
-This spec was itself designed through a [Claude + Codex discussion](https://github.com/Restuta/discuss-skill-claude/blob/main/examples/full-discussion.md). The process validated the protocol.
+This spec was itself designed through a Claude + Codex discussion. The process validated the protocol.
 
-Based on research showing multi-agent debate improves factual accuracy and reasoning quality (Du et al. 2023, "Improving Factuality and Reasoning in Language Models through Multiagent Debate").
+### Research backing
+
+Multi-agent debate is not just a vibe — there's real research showing it improves accuracy:
+
+- **Du et al. (2023/ICML 2024)** — "[Improving Factuality and Reasoning in Language Models through Multiagent Debate](https://arxiv.org/abs/2305.14325)". Multiple agents debating improved ChatGPT-3.5 accuracy on math (GSM8K) from 77% to 85%, on MMLU from 64% to 71%, and on biographical factuality from 66% to 74%. Cross-model debate (Bard + ChatGPT) solved 17/20 problems vs. 14 and 11 individually.
+
+- **Khan et al. (ICML 2024, Best Paper)** — "[Debating with More Persuasive LLMs Leads to More Truthful Answers](https://arxiv.org/abs/2402.06782)". When two LLM debaters argue opposing sides and a non-expert judge picks the winner, accuracy jumped from 48% to 76% (non-expert models) and from 60% to 88% (humans).
+
+- **Chen et al. (ACL 2024)** — "[ReConcile: Round-Table Conference Improves Reasoning via Consensus among Diverse LLMs](https://arxiv.org/abs/2309.13007)". Round-table discussion with confidence-weighted voting surpassed GPT-4 on three benchmarks, up to +11.4% improvement.
+
+- **Liang et al. (EMNLP 2024)** — "[Encouraging Divergent Thinking in Large Language Models through Multi-Agent Debate](https://arxiv.org/abs/2305.19118)". Found that LLMs suffer from "Degeneration-of-Thought" in self-reflection — multi-agent debate overcomes it. GPT-3.5 with debate surpassed GPT-4 on commonsense translation.
+
+**Caveat:** A [2025 ICLR analysis](https://d2jud02ci9yv69.cloudfront.net/2025-04-28-mad-159/blog/mad/) noted that multi-agent debate doesn't consistently outperform simpler methods like chain-of-thought on all benchmarks. The benefits are most pronounced on tasks requiring diverse perspectives, factual verification, and structured reasoning — which is exactly what this tool targets.
 
 ## Project structure
 
@@ -147,86 +159,17 @@ The protocol document is the product. Adapters are boring glue. If a new AI tool
 
 ## For AI Agents
 
-If you are an AI agent being asked to participate in a discussion using this skill, read this section.
+If you are an AI agent and a user asks you to use this skill:
 
-### Install (if not already installed)
-
+**Claude Code — install and use:**
 ```bash
 curl -o ~/.claude/commands/discuss.md https://raw.githubusercontent.com/Restuta/discuss-skill-claude/main/adapters/claude/.claude/commands/discuss.md
 ```
+Then run `/discuss` — the command file contains all instructions for every mode.
 
-After installing, the `/discuss` command is available. If you are not Claude Code (e.g., Codex, Cursor, or another AI), you don't need to install anything — just read the protocol and follow it.
+**Codex** — read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) in this repo.
 
-### Quick orientation
-
-1. Read `protocol/discuss-protocol-v1.md` — it contains all the rules you need to follow
-2. The discussion file (the `.md` file the user pointed you to) contains the current state in YAML frontmatter and the full conversation history in the body
-3. You are append-only — never delete or rewrite earlier entries
-
-### Joining a discussion
-
-1. Read the discussion file
-2. Check the `agent_a` and `agent_b` fields in frontmatter — claim the first unassigned slot
-3. Check `status` and `turn` to know what to do:
-   - `status: researching` + your turn → write your blind research using your assigned lens
-   - `status: discussing` + your turn → write a structured response (steel-man, evidence, confidence, question)
-   - `status: discussing` + not your turn → wait and poll the file for changes
-   - `status: consensus` or `deadlock` → discussion is over, display the summary
-4. After writing, update `turn` to the next participant and `last_updated`
-
-### Response format
-
-Every discussion turn must use this heading and structure:
-
-```markdown
-### Round N — YourName | response | confidence: X%
-
-**Response to previous point:**
-Steel-man their argument, then agree/disagree/synthesize.
-
-**New evidence or angle:**
-Something not yet discussed. If nothing new, say so.
-
-**Current position:**
-Updated position with confidence % and justification.
-
-**Question for [other participant]:**
-One specific question to resolve disagreement.
-```
-
-### Key rules
-
-- **Steel-man first** — restate the other's argument in its strongest form before responding
-- **Evidence over assertion** — ground claims in specifics
-- **Calibrated confidence** — use percentages, not vague hedging
-- **Change your mind visibly** — say what shifted and why
-- **Stay scoped** — flag tangents as `[PARKING LOT]`, don't chase them
-- **Round 3+** — end with convergence assessment: `CONVERGING / PARALLEL / DIVERGING / DEADLOCKED`
-- **Round > max_rounds** — you must write a `consensus` entry, no more responses allowed
-
-### Consensus format
-
-```markdown
-## Consensus Summary
-
-### Decision
-[2-3 sentences]
-
-### Key Contention Points
-| # | What We Disagreed On | How It Was Resolved | Who Shifted & Why |
-|---|---------------------|--------------------|--------------------|
-| 1 | ... | ... | ... |
-
-### Unresolved Items & Risks
-- ...
-
-### Confidence: [High | Medium | Low]
-[1 sentence justification]
-```
-
-### Full protocol
-
-Read `protocol/discuss-protocol-v1.md` for the complete specification including file format, entry types, git behavior, and synchronization rules.
+**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt. Follow it and you can participate in any discussion.
 
 ## License
 
