@@ -49,8 +49,10 @@ last_updated: 2026-03-13T10:15:00Z
 - `blind_briefs` (default `true`): whether agents research independently before debate
 - `max_rounds` (default `7`, range 1-15): discussion rounds before forced synthesis
 - `git_commit` (default `final_only`): `none | final_only | every_turn`
-- `agent_a`, `agent_b`: participant names/identifiers
 - `agent_a_lens`, `agent_b_lens`: analytical perspectives assigned to each agent
+
+**Claim-once fields** may be written once when a participant joins, then never modified:
+- `agent_a`, `agent_b`: participant names/identifiers. Initialized as `"unassigned"` in external mode and claimed by joining participants (see 6.3).
 
 **State fields** are updated each turn:
 - `status`: `researching | discussing | consensus | deadlock`
@@ -381,7 +383,7 @@ The discussion file is strictly append-only:
 
 1. Never delete earlier entries
 2. Never rewrite earlier entries
-3. Never mutate frontmatter setup fields after init
+3. Never mutate frontmatter setup fields after init (claim-once fields may be written once; see 2.1)
 4. Frontmatter state fields (`status`, `turn`, `round`, `last_updated`) are the ONLY mutable parts of the file
 5. The consensus summary is appended at the end, not inserted at the top
 6. If a position changes, explain the change in a new entry — don't edit the old one
