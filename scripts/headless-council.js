@@ -1,25 +1,53 @@
 #!/usr/bin/env node
 
 // headless-council.js — Orchestrates a council discussion using top-level
-// claude -p instances with full extended thinking.
+// CLI instances with full reasoning capabilities.
+//
+// Supports multiple AI CLIs (Claude, Codex, or any CLI that takes a prompt
+// and returns text to stdout). Each agent can use a different CLI.
 //
 // Usage: node scripts/headless-council.js <discussion-file.md>
 //
 // The discussion file must already exist with frontmatter (topic, agents,
 // lenses, key questions). This script handles research, discussion rounds,
 // validation, and consensus.
+//
+// Agent CLIs are configured via frontmatter:
+//   agent_a_cli: "claude"   (default)
+//   agent_b_cli: "codex"
+//
+// Supported CLIs: claude, codex (extensible via CLI_PROFILES)
 
 const { execSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-// --- Config ---
+// --- CLI Profiles ---
+// Each profile defines how to invoke a specific AI CLI in headless mode.
+// To add a new CLI, add an entry here.
 
-const EFFORT = "--effort high";
-const ALLOWED_TOOLS = '--allowedTools "Read,Grep,Glob,Bash"';
-const OUTPUT_FORMAT = "--output-format text";
-const MAX_RETRIES = 1;
+const CLI_PROFILES = {
+  claude: {
+    name: "Claude",
+    binary: "claude",
+    buildCmd: (promptFile) =>
+      `cat "${promptFile}" | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
+    check: () => {
+      execSync("which claude", { stdio: "pipe" });
+      execSync("claude --version", { stdio: "pipe" });
+    },
+  },
+  codex: {
+    name: "Codex",
+    binary: "codex",
+    buildCmd: (promptFile) =>
+      `cat "${promptFile}" | codex exec --full-auto -`,
+    check: () => {
+      execSync("which codex", { stdio: "pipe" });
+    },
+  },
+};
 
 // --- Helpers ---
 
@@ -27,14 +55,30 @@ function log(msg) {
   process.stderr.write(`[council] ${msg}\n`);
 }
 
-function preflight() {
-  try {
-    execSync("which claude", { stdio: "pipe" });
-    execSync("claude --version", { stdio: "pipe" });
-    return true;
-  } catch {
-    return false;
+function getProfile(cliName) {
+  const profile = CLI_PROFILES[cliName];
+  if (!profile) {
+    throw new Error(
+      `Unknown CLI "${cliName}". Supported: ${Object.keys(CLI_PROFILES).join(", ")}`
+    );
   }
+  return profile;
+}
+
+function preflight(cliNames) {
+  const results = {};
+  for (const name of cliNames) {
+    const profile = getProfile(name);
+    try {
+      profile.check();
+      results[name] = true;
+      log(`Preflight OK: ${profile.name} (${profile.binary})`);
+    } catch {
+      results[name] = false;
+      log(`Preflight FAILED: ${profile.name} (${profile.binary}) not available`);
+    }
+  }
+  return results;
 }
 
 function parseFrontmatter(content) {
@@ -65,11 +109,15 @@ function updateFrontmatter(content, updates) {
   });
 }
 
-function runClaude(promptText, tmpDir) {
-  const promptFile = path.join(tmpDir, `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
+function runAgent(promptText, cliName, tmpDir) {
+  const profile = getProfile(cliName);
+  const promptFile = path.join(
+    tmpDir,
+    `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+  );
   fs.writeFileSync(promptFile, promptText);
 
-  const cmd = `cat "${promptFile}" | claude -p ${EFFORT} ${OUTPUT_FORMAT} ${ALLOWED_TOOLS}`;
+  const cmd = profile.buildCmd(promptFile);
 
   try {
     const result = execSync(cmd, {
@@ -80,20 +128,25 @@ function runClaude(promptText, tmpDir) {
     });
     return result.trim();
   } catch (err) {
-    log(`Claude call failed: ${err.message}`);
+    log(`${profile.name} call failed: ${err.message}`);
     return null;
   }
 }
 
-function runClaudeParallel(prompts, tmpDir) {
+function runAgentsParallel(agentConfigs, tmpDir) {
   return Promise.all(
-    prompts.map(
-      (promptText) =>
+    agentConfigs.map(
+      ({ promptText, cliName }) =>
         new Promise((resolve) => {
-          const promptFile = path.join(tmpDir, `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`);
+          const profile = getProfile(cliName);
+          const promptFile = path.join(
+            tmpDir,
+            `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+          );
           fs.writeFileSync(promptFile, promptText);
 
-          const child = spawn("sh", ["-c", `cat "${promptFile}" | claude -p ${EFFORT} ${OUTPUT_FORMAT} ${ALLOWED_TOOLS}`], {
+          const cmd = profile.buildCmd(promptFile);
+          const child = spawn("sh", ["-c", cmd], {
             stdio: ["pipe", "pipe", "pipe"],
             timeout: 300000,
           });
@@ -104,14 +157,14 @@ function runClaudeParallel(prompts, tmpDir) {
           child.stderr.on("data", (d) => (stderr += d));
           child.on("close", (code) => {
             if (code !== 0) {
-              log(`Claude call exited ${code}: ${stderr.slice(0, 200)}`);
+              log(`${profile.name} exited ${code}: ${stderr.slice(0, 200)}`);
               resolve(null);
             } else {
               resolve(stdout.trim());
             }
           });
           child.on("error", (err) => {
-            log(`Claude spawn error: ${err.message}`);
+            log(`${profile.name} spawn error: ${err.message}`);
             resolve(null);
           });
         })
@@ -134,9 +187,11 @@ function validateResponse(output, round) {
   const hasNewEvidence = output.includes("**New evidence or angle:**");
   const hasPosition = output.includes("**Current position:**");
   const hasQuestion = output.includes("**Question for");
-  if (!hasHeading || !hasResponseTo || !hasNewEvidence || !hasPosition || !hasQuestion) return false;
+  if (!hasHeading || !hasResponseTo || !hasNewEvidence || !hasPosition || !hasQuestion)
+    return false;
   if (round >= 3) {
-    const hasConvergence = /\*\*Convergence assessment:\*\*|CONVERGING|PARALLEL|DIVERGING|DEADLOCKED/.test(output);
+    const hasConvergence =
+      /\*\*Convergence assessment:\*\*|CONVERGING|PARALLEL|DIVERGING|DEADLOCKED/.test(output);
     if (!hasConvergence) return false;
   }
   return true;
@@ -172,7 +227,7 @@ function buildResearchPrompt(topic, agent, lens) {
 
 Your analytical lens: ${lensDesc}
 
-Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to Read, Grep, Glob, and Bash tools — use them if the topic involves a specific codebase or requires inspecting local files.
+Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to tools for reading files and running commands — use them if the topic involves a specific codebase or requires inspecting local files.
 
 Return ONLY this formatted output, nothing else:
 
@@ -289,6 +344,12 @@ async function main() {
   const filePath = process.argv[2];
   if (!filePath) {
     console.error("Usage: node scripts/headless-council.js <discussion-file.md>");
+    console.error("");
+    console.error("Configure agent CLIs via frontmatter:");
+    console.error('  agent_a_cli: "claude"   (default)');
+    console.error('  agent_b_cli: "codex"');
+    console.error("");
+    console.error(`Supported CLIs: ${Object.keys(CLI_PROFILES).join(", ")}`);
     process.exit(1);
   }
 
@@ -298,21 +359,40 @@ async function main() {
     process.exit(1);
   }
 
-  // Preflight
-  if (!preflight()) {
-    console.error("FALLBACK: Claude CLI not available. Use subagent mode instead.");
+  let content = fs.readFileSync(absPath, "utf-8");
+  let fm = parseFrontmatter(content);
+
+  // Resolve CLI for each agent (default: claude)
+  const cliA = fm.agent_a_cli || "claude";
+  const cliB = fm.agent_b_cli || "claude";
+
+  log(`Agent A: ${getProfile(cliA).name} (${cliA})`);
+  log(`Agent B: ${getProfile(cliB).name} (${cliB})`);
+
+  // Preflight — check all required CLIs
+  const uniqueClis = [...new Set([cliA, cliB])];
+  const preflightResults = preflight(uniqueClis);
+  const allPassed = uniqueClis.every((cli) => preflightResults[cli]);
+
+  if (!allPassed) {
+    const failed = uniqueClis.filter((cli) => !preflightResults[cli]);
+    console.error(
+      `FALLBACK: CLI(s) not available: ${failed.join(", ")}. Use subagent mode instead.`
+    );
     process.exit(2); // Exit code 2 signals fallback to caller
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "discuss-council-"));
   log(`Temp directory: ${tmpDir}`);
 
+  // Map agent letter to CLI
+  const agentCli = { A: cliA, B: cliB };
+
   try {
-    let content = fs.readFileSync(absPath, "utf-8");
-    let fm = parseFrontmatter(content);
     const topic = fm.topic;
     const maxRounds = parseInt(fm.max_rounds || "7", 10);
     const gitMode = fm.git_commit || "final_only";
+
     log(`Topic: ${topic}`);
     log(`Max rounds: ${maxRounds}, Git: ${gitMode}`);
 
@@ -323,7 +403,13 @@ async function main() {
       const promptA = buildResearchPrompt(topic, "A", fm.agent_a_lens);
       const promptB = buildResearchPrompt(topic, "B", fm.agent_b_lens);
 
-      const [resultA, resultB] = await runClaudeParallel([promptA, promptB], tmpDir);
+      const [resultA, resultB] = await runAgentsParallel(
+        [
+          { promptText: promptA, cliName: cliA },
+          { promptText: promptB, cliName: cliB },
+        ],
+        tmpDir
+      );
 
       if (!validateResearch(resultA, "A")) {
         log("WARNING: Agent A research failed validation");
@@ -343,7 +429,11 @@ async function main() {
       });
       fs.writeFileSync(absPath, content);
 
-      gitCommit(absPath, "discuss: initial research complete", gitMode === "every_turn" ? "every_turn" : "none");
+      gitCommit(
+        absPath,
+        "discuss: initial research complete",
+        gitMode === "every_turn" ? "every_turn" : "none"
+      );
       log("Research phase complete.");
     }
 
@@ -355,19 +445,22 @@ async function main() {
 
     while (status === "discussing" && round <= maxRounds) {
       for (const agent of ["A", "B"]) {
-        log(`Round ${round} — Agent ${agent}...`);
+        const cli = agentCli[agent];
+        log(`Round ${round} — Agent ${agent} (${getProfile(cli).name})...`);
 
         content = fs.readFileSync(absPath, "utf-8");
         const lens = agent === "A" ? fm.agent_a_lens : fm.agent_b_lens;
         const prompt = buildTurnPrompt(topic, agent, lens, content, round);
 
-        let result = runClaude(prompt, tmpDir);
+        let result = runAgent(prompt, cli, tmpDir);
 
         // Validate with retry
         if (!validateResponse(result, round)) {
           log(`Agent ${agent} output failed validation, retrying...`);
-          const retryPrompt = prompt + "\n\nIMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.";
-          result = runClaude(retryPrompt, tmpDir);
+          const retryPrompt =
+            prompt +
+            "\n\nIMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.";
+          result = runAgent(retryPrompt, cli, tmpDir);
 
           if (!validateResponse(result, round)) {
             log(`Agent ${agent} retry also failed. Appending raw output.`);
@@ -399,7 +492,6 @@ async function main() {
             break;
           }
           if ((conv === "CONVERGING" || conv === "PARALLEL") && agent === "B") {
-            // Check if the response includes a consensus entry
             if (result.includes("## Consensus Summary")) {
               status = "consensus";
               break;
@@ -418,15 +510,21 @@ async function main() {
     }
 
     // Phase 3: Consensus
+    // Use Agent A's CLI for consensus writing (arbitrary choice — it has the full context)
     if (status !== "consensus") {
       log("Phase 3: Writing consensus...");
       content = fs.readFileSync(absPath, "utf-8");
       const consensusPrompt = buildConsensusPrompt(content);
-      let consensus = runClaude(consensusPrompt, tmpDir);
+      let consensus = runAgent(consensusPrompt, cliA, tmpDir);
 
       if (!validateConsensus(consensus)) {
         log("Consensus failed validation, retrying...");
-        consensus = runClaude(consensusPrompt + "\n\nIMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items, and Confidence.", tmpDir);
+        consensus = runAgent(
+          consensusPrompt +
+            "\n\nIMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items, and Confidence.",
+          cliA,
+          tmpDir
+        );
       }
 
       content = fs.readFileSync(absPath, "utf-8");
@@ -446,7 +544,7 @@ async function main() {
     log(`Discussion complete. Status: ${finalFm.status}`);
     log(`File: ${absPath}`);
 
-    // Print summary to stdout for the orchestrating Claude to read
+    // Print summary to stdout for the orchestrating caller to read
     const finalContent = fs.readFileSync(absPath, "utf-8");
     const consensusMatch = finalContent.match(/## Consensus Summary[\s\S]*$/);
     if (consensusMatch) {

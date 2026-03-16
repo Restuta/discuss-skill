@@ -5,9 +5,10 @@ A single command for structured, turn-based AI discussions. Supports three modes
 ## Usage
 
 ```
-/discuss "topic" file.md                  → external mode (default): creates discussion file, waits for another AI
-/discuss "topic" file.md --mode council   → council mode: orchestrates two independent Claude instances debating to completion
-/discuss file.md                          → join mode: joins an existing discussion as a participant
+/discuss "topic" file.md                              → external mode (default): creates discussion file, waits for another AI
+/discuss "topic" file.md --mode council               → council mode: orchestrates two Claude instances debating to completion
+/discuss "topic" file.md --mode council --agents claude,codex  → council with cross-model debate (Claude vs Codex)
+/discuss file.md                                      → join mode: joins an existing discussion as a participant
 ```
 
 When invoked, print this to the user so they know what's happening:
@@ -47,6 +48,7 @@ Parse the user's input to determine the mode:
 
 1. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode council` flag → council mode
+   - Check for `--agents X,Y` flag → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
    - Otherwise → external mode (default)
 2. If **only a file path** is provided and the file exists → join mode
 3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
@@ -144,6 +146,8 @@ max_rounds: 7
 git_commit: final_only
 agent_a: "Claude Agent A"
 agent_b: "Claude Agent B"
+agent_a_cli: "claude"
+agent_b_cli: "claude"
 agent_a_lens: "risk/cost/failure"
 agent_b_lens: "value/opportunity/success"
 status: researching
@@ -163,6 +167,21 @@ last_updated: <ISO 8601 timestamp>
 
 The orchestrator MUST generate the Key Questions from the topic when creating the discussion file.
 
+### Cross-model discussions
+
+Council mode supports running different AI CLIs for each agent. Set `agent_a_cli` and `agent_b_cli` in the frontmatter to control which CLI runs each side of the debate. Both default to `"claude"`.
+
+Supported CLIs:
+- `claude` — Claude Code CLI (`claude -p --effort high`)
+- `codex` — OpenAI Codex CLI (`codex exec --full-auto`)
+
+When the user specifies `--agents claude,codex` (or similar), parse the comma-separated values and set `agent_a_cli` and `agent_b_cli` accordingly in the frontmatter. Agent names in the frontmatter should reflect the CLI: e.g. `agent_a: "Claude"`, `agent_b: "Codex"`.
+
+Example:
+```
+/discuss "Should we use a monorepo?" monorepo.md --mode council --agents claude,codex
+```
+
 ### Orchestration
 
 Council mode is orchestrated by a Node.js script that handles all process management, validation, and file updates deterministically. The skill file (this document) handles routing and file creation; the script handles execution.
@@ -174,16 +193,15 @@ node scripts/headless-council.js <discussion-file.md>
 ```
 
 The script:
-1. Runs a preflight check (`which claude && claude --version`). If it fails, exits with code 2 — fall back to subagent mode and inform the user: "Claude CLI not available. Falling back to subagent mode (reduced reasoning capability)."
-2. Creates a per-run temp directory (`mktemp -d`) for all prompt/result files
-3. **Phase 1 — Blind Research:** Runs two parallel `claude -p --effort high` instances with opposing lenses. Validates output format (correct heading). Appends to file.
-4. **Phase 2 — Discussion Rounds:** Alternates Agent A and Agent B turns. Each turn gets the full current file content, turn structure, and master prompt principles. Validates all required sections (heading, steel-man, new evidence, position, question; convergence assessment for round 3+). Retries once on malformed output.
-5. **Phase 3 — Consensus:** When agents converge, deadlock, or exceed max rounds, generates a consensus entry with the standard format (Decision, Key Contention Points, Unresolved Items, Confidence).
-6. Cleans up temp directory and prints the consensus summary to stdout.
+1. Reads `agent_a_cli` and `agent_b_cli` from frontmatter (default: `"claude"`)
+2. Runs a preflight check for each required CLI. If any fails, exits with code 2 — fall back to subagent mode and inform the user.
+3. Creates a per-run temp directory (`mktemp -d`) for all prompt/result files
+4. **Phase 1 — Blind Research:** Runs two parallel instances (each using its configured CLI) with opposing lenses. Validates output format. Appends to file.
+5. **Phase 2 — Discussion Rounds:** Alternates Agent A and Agent B turns, each using its own CLI. Validates all required sections. Retries once on malformed output.
+6. **Phase 3 — Consensus:** Generates consensus entry when agents converge, deadlock, or exceed max rounds.
+7. Cleans up temp directory and prints the consensus summary to stdout.
 
-All headless calls use `--effort high --allowedTools "Read,Grep,Glob,Bash"` so agents can inspect the codebase for repo-specific discussions.
-
-The script is at `scripts/headless-council.js` in the discuss-skill repo. It uses only Node.js built-ins (no npm dependencies).
+The script is at `scripts/headless-council.js`. Zero npm dependencies. Adding a new CLI requires only adding an entry to the `CLI_PROFILES` object in the script.
 
 ---
 
