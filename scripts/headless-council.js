@@ -31,20 +31,30 @@ const CLI_PROFILES = {
   claude: {
     name: "Claude",
     binary: "claude",
-    buildCmd: (promptFile) =>
-      `cat "${promptFile}" | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
+    buildCmd: (promptFile, cwd) =>
+      `cd "${cwd}" && cat "${promptFile}" | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });
+      // Auth probe: minimal call to verify credentials
+      execSync('echo "say ok" | claude -p --output-format text --max-turns 1', {
+        stdio: "pipe",
+        timeout: 30000,
+      });
     },
   },
   codex: {
     name: "Codex",
     binary: "codex",
-    buildCmd: (promptFile) =>
-      `cat "${promptFile}" | codex exec --full-auto -`,
+    buildCmd: (promptFile, cwd) =>
+      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -C "${cwd}" -`,
     check: () => {
       execSync("which codex", { stdio: "pipe" });
+      // Auth probe: minimal call to verify credentials
+      execSync('echo "say ok" | codex exec --full-auto --skip-git-repo-check -', {
+        stdio: "pipe",
+        timeout: 30000,
+      });
     },
   },
 };
@@ -109,7 +119,7 @@ function updateFrontmatter(content, updates) {
   });
 }
 
-function runAgent(promptText, cliName, tmpDir) {
+function runAgent(promptText, cliName, tmpDir, cwd) {
   const profile = getProfile(cliName);
   const promptFile = path.join(
     tmpDir,
@@ -117,7 +127,7 @@ function runAgent(promptText, cliName, tmpDir) {
   );
   fs.writeFileSync(promptFile, promptText);
 
-  const cmd = profile.buildCmd(promptFile);
+  const cmd = profile.buildCmd(promptFile, cwd);
 
   try {
     const result = execSync(cmd, {
@@ -133,7 +143,7 @@ function runAgent(promptText, cliName, tmpDir) {
   }
 }
 
-function runAgentsParallel(agentConfigs, tmpDir) {
+function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   return Promise.all(
     agentConfigs.map(
       ({ promptText, cliName }) =>
@@ -145,7 +155,7 @@ function runAgentsParallel(agentConfigs, tmpDir) {
           );
           fs.writeFileSync(promptFile, promptText);
 
-          const cmd = profile.buildCmd(promptFile);
+          const cmd = profile.buildCmd(promptFile, cwd);
           const child = spawn("sh", ["-c", cmd], {
             stdio: ["pipe", "pipe", "pipe"],
             timeout: 300000,
@@ -387,6 +397,8 @@ async function main() {
 
   // Map agent letter to CLI
   const agentCli = { A: cliA, B: cliB };
+  // Run CLIs from the discussion file's directory for codebase access
+  const cwd = path.dirname(absPath);
 
   try {
     const topic = fm.topic;
@@ -408,7 +420,8 @@ async function main() {
           { promptText: promptA, cliName: cliA },
           { promptText: promptB, cliName: cliB },
         ],
-        tmpDir
+        tmpDir,
+        cwd
       );
 
       if (!validateResearch(resultA, "A")) {
@@ -452,7 +465,7 @@ async function main() {
         const lens = agent === "A" ? fm.agent_a_lens : fm.agent_b_lens;
         const prompt = buildTurnPrompt(topic, agent, lens, content, round);
 
-        let result = runAgent(prompt, cli, tmpDir);
+        let result = runAgent(prompt, cli, tmpDir, cwd);
 
         // Validate with retry
         if (!validateResponse(result, round)) {
@@ -460,7 +473,7 @@ async function main() {
           const retryPrompt =
             prompt +
             "\n\nIMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.";
-          result = runAgent(retryPrompt, cli, tmpDir);
+          result = runAgent(retryPrompt, cli, tmpDir, cwd);
 
           if (!validateResponse(result, round)) {
             log(`Agent ${agent} retry also failed. Appending raw output.`);
@@ -492,10 +505,8 @@ async function main() {
             break;
           }
           if ((conv === "CONVERGING" || conv === "PARALLEL") && agent === "B") {
-            if (result.includes("## Consensus Summary")) {
-              status = "consensus";
-              break;
-            }
+            log(`${conv} — both agents aligned, moving to consensus.`);
+            break; // Exit discussion loop, Phase 3 will write consensus
           }
         }
       }
@@ -515,7 +526,7 @@ async function main() {
       log("Phase 3: Writing consensus...");
       content = fs.readFileSync(absPath, "utf-8");
       const consensusPrompt = buildConsensusPrompt(content);
-      let consensus = runAgent(consensusPrompt, cliA, tmpDir);
+      let consensus = runAgent(consensusPrompt, cliA, tmpDir, cwd);
 
       if (!validateConsensus(consensus)) {
         log("Consensus failed validation, retrying...");
@@ -523,7 +534,8 @@ async function main() {
           consensusPrompt +
             "\n\nIMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items, and Confidence.",
           cliA,
-          tmpDir
+          tmpDir,
+          cwd
         );
       }
 

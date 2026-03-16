@@ -189,7 +189,7 @@ Council mode is orchestrated by a Node.js script that handles all process manage
 After creating the discussion file, run the orchestrator:
 
 ```bash
-node scripts/headless-council.js <discussion-file.md>
+node ~/.claude/scripts/headless-council.js <discussion-file.md>
 ```
 
 The script:
