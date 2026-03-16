@@ -23,6 +23,34 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
+// --- Constants ---
+
+const CONVERGENCE = {
+  CONVERGING: "CONVERGING",
+  PARALLEL: "PARALLEL",
+  DEADLOCKED: "DEADLOCKED",
+  DIVERGING: "DIVERGING",
+};
+
+const STATUS = {
+  RESEARCHING: "researching",
+  DISCUSSING: "discussing",
+  CONSENSUS: "consensus",
+  DEADLOCK: "deadlock",
+  CONVERGED: "converged",
+};
+
+const LENS_DESC = {
+  A: {
+    research: "Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.",
+    turn: "RISKS, COSTS, FAILURE MODES. Be the skeptic.",
+  },
+  B: {
+    research: "Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.",
+    turn: "BENEFITS, OPPORTUNITIES, SUCCESS CASES. Be the advocate.",
+  },
+};
+
 // --- CLI Profiles ---
 // Each profile defines how to invoke a specific AI CLI in headless mode.
 // To add a new CLI, add an entry here.
@@ -107,32 +135,33 @@ function parseFrontmatter(content) {
 }
 
 function updateFrontmatter(content, updates) {
-  return content.replace(/^---\n([\s\S]*?)\n---/, (match, fm) => {
+  return content.replace(/^---\n([\s\S]*?)\n---/, (_, fm) => {
     let updated = fm;
     for (const [key, val] of Object.entries(updates)) {
-      const regex = new RegExp(`^${key}:.*$`, "m");
-      if (regex.test(updated)) {
-        updated = updated.replace(regex, `${key}: ${val}`);
-      }
+      updated = updated.replace(new RegExp(`^${key}:.*$`, "m"), `${key}: ${val}`);
     }
     return `---\n${updated}\n---`;
   });
 }
 
-function runAgent(promptText, cliName, tmpDir, cwd) {
-  const profile = getProfile(cliName);
+function preparePromptFile(promptText, tmpDir) {
   const promptFile = path.join(
     tmpDir,
     `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
   );
   fs.writeFileSync(promptFile, promptText);
+  return promptFile;
+}
 
+function runAgent(promptText, cliName, tmpDir, cwd) {
+  const profile = getProfile(cliName);
+  const promptFile = preparePromptFile(promptText, tmpDir);
   const cmd = profile.buildCmd(promptFile, cwd);
 
   try {
     const result = execSync(cmd, {
       encoding: "utf-8",
-      timeout: 300000, // 5 min per call
+      timeout: 300000,
       maxBuffer: 1024 * 1024 * 10,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -149,13 +178,9 @@ function runAgentsParallel(agentConfigs, tmpDir, cwd) {
       ({ promptText, cliName }) =>
         new Promise((resolve) => {
           const profile = getProfile(cliName);
-          const promptFile = path.join(
-            tmpDir,
-            `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
-          );
-          fs.writeFileSync(promptFile, promptText);
-
+          const promptFile = preparePromptFile(promptText, tmpDir);
           const cmd = profile.buildCmd(promptFile, cwd);
+
           const child = spawn("sh", ["-c", cmd], {
             stdio: ["pipe", "pipe", "pipe"],
             timeout: 300000,
@@ -182,12 +207,23 @@ function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   );
 }
 
+function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd) {
+  let result = runAgent(promptText, cliName, tmpDir, cwd);
+  if (!validator(result)) {
+    log("Output failed validation, retrying...");
+    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd);
+    if (!validator(result)) {
+      log("Retry also failed. Using raw output.");
+    }
+  }
+  return result;
+}
+
 // --- Validation ---
 
 function validateResearch(output, agent) {
   if (!output) return false;
-  const heading = `### Agent ${agent} — Independent Research | research`;
-  return output.includes(heading);
+  return output.includes(`### Agent ${agent} — Independent Research | research`);
 }
 
 function validateResponse(output, round) {
@@ -200,9 +236,9 @@ function validateResponse(output, round) {
   if (!hasHeading || !hasResponseTo || !hasNewEvidence || !hasPosition || !hasQuestion)
     return false;
   if (round >= 3) {
-    const hasConvergence =
-      /\*\*Convergence assessment:\*\*|CONVERGING|PARALLEL|DIVERGING|DEADLOCKED/.test(output);
-    if (!hasConvergence) return false;
+    const convergencePattern = Object.values(CONVERGENCE).join("|");
+    if (!new RegExp(`\\*\\*Convergence assessment:\\*\\*|${convergencePattern}`).test(output))
+      return false;
   }
   return true;
 }
@@ -213,15 +249,15 @@ function validateConsensus(output) {
     output.includes("## Consensus Summary") &&
     output.includes("### Decision") &&
     output.includes("### Key Contention Points") &&
+    output.includes("### Unresolved Items") &&
     output.includes("### Confidence:")
   );
 }
 
 function extractConvergence(output) {
-  if (/CONVERGING/.test(output)) return "CONVERGING";
-  if (/PARALLEL/.test(output)) return "PARALLEL";
-  if (/DEADLOCKED/.test(output)) return "DEADLOCKED";
-  if (/DIVERGING/.test(output)) return "DIVERGING";
+  for (const state of Object.values(CONVERGENCE)) {
+    if (new RegExp(state).test(output)) return state;
+  }
   return null;
 }
 
@@ -229,9 +265,12 @@ function extractConvergence(output) {
 
 const PROMPTS_DIR = path.join(__dirname, "prompts");
 
+const templateCache = {};
 function loadTemplate(name) {
-  const filePath = path.join(PROMPTS_DIR, `${name}.template`);
-  return fs.readFileSync(filePath, "utf-8");
+  if (!templateCache[name]) {
+    templateCache[name] = fs.readFileSync(path.join(PROMPTS_DIR, `${name}.template`), "utf-8");
+  }
+  return templateCache[name];
 }
 
 function fillTemplate(template, vars) {
@@ -240,23 +279,16 @@ function fillTemplate(template, vars) {
 
 // --- Prompt builders ---
 
-function buildResearchPrompt(topic, agent, lens) {
-  const lensDesc =
-    agent === "A"
-      ? "Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic."
-      : "Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.";
-
-  return fillTemplate(loadTemplate("research"), { topic, agent, lensDesc });
+function buildResearchPrompt(topic, agent) {
+  return fillTemplate(loadTemplate("research"), {
+    topic,
+    agent,
+    lensDesc: LENS_DESC[agent].research,
+  });
 }
 
-function buildTurnPrompt(topic, agent, lens, fileContent, round) {
-  const lensDesc =
-    agent === "A"
-      ? "RISKS, COSTS, FAILURE MODES. Be the skeptic."
-      : "BENEFITS, OPPORTUNITIES, SUCCESS CASES. Be the advocate.";
-
+function buildTurnPrompt(agent, fileContent, round) {
   const otherAgent = agent === "A" ? "Agent B" : "Agent A";
-
   const convergenceInstr =
     round >= 3
       ? fillTemplate(loadTemplate("convergence"), { round: String(round) })
@@ -264,7 +296,7 @@ function buildTurnPrompt(topic, agent, lens, fileContent, round) {
 
   return fillTemplate(loadTemplate("turn"), {
     agent,
-    lensDesc,
+    lensDesc: LENS_DESC[agent].turn,
     fileContent,
     round: String(round),
     otherAgent,
@@ -281,7 +313,8 @@ function buildConsensusPrompt(fileContent) {
 function gitCommit(filePath, message, mode) {
   if (mode === "none") return;
   try {
-    execSync(`git add "${filePath}" && git commit -m "${message}"`, {
+    const escaped = message.replace(/'/g, "'\\''");
+    execSync(`git add '${filePath}' && git commit -m '${escaped}'`, {
       cwd: path.dirname(filePath),
       stdio: "pipe",
     });
@@ -306,12 +339,18 @@ async function main() {
   }
 
   const absPath = path.resolve(filePath);
-  if (!fs.existsSync(absPath)) {
-    console.error(`File not found: ${absPath}`);
-    process.exit(1);
+
+  let content;
+  try {
+    content = fs.readFileSync(absPath, "utf-8");
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      console.error(`File not found: ${absPath}`);
+      process.exit(1);
+    }
+    throw err;
   }
 
-  let content = fs.readFileSync(absPath, "utf-8");
   let fm = parseFrontmatter(content);
 
   // Resolve CLI for each agent (default: claude)
@@ -331,15 +370,13 @@ async function main() {
     console.error(
       `FALLBACK: CLI(s) not available: ${failed.join(", ")}. Use subagent mode instead.`
     );
-    process.exit(2); // Exit code 2 signals fallback to caller
+    process.exit(2);
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "discuss-council-"));
   log(`Temp directory: ${tmpDir}`);
 
-  // Map agent letter to CLI
   const agentCli = { A: cliA, B: cliB };
-  // Run CLIs from the discussion file's directory for codebase access
   const cwd = path.dirname(absPath);
 
   try {
@@ -351,11 +388,11 @@ async function main() {
     log(`Max rounds: ${maxRounds}, Git: ${gitMode}`);
 
     // Phase 1: Blind Research
-    if (fm.status === "researching") {
+    if (fm.status === STATUS.RESEARCHING) {
       log("Phase 1: Blind research (parallel)...");
 
-      const promptA = buildResearchPrompt(topic, "A", fm.agent_a_lens);
-      const promptB = buildResearchPrompt(topic, "B", fm.agent_b_lens);
+      const promptA = buildResearchPrompt(topic, "A");
+      const promptB = buildResearchPrompt(topic, "B");
 
       const [resultA, resultB] = await runAgentsParallel(
         [
@@ -366,29 +403,20 @@ async function main() {
         cwd
       );
 
-      if (!validateResearch(resultA, "A")) {
-        log("WARNING: Agent A research failed validation");
-      }
-      if (!validateResearch(resultB, "B")) {
-        log("WARNING: Agent B research failed validation");
-      }
+      if (!validateResearch(resultA, "A")) log("WARNING: Agent A research failed validation");
+      if (!validateResearch(resultB, "B")) log("WARNING: Agent B research failed validation");
 
-      // Append research
       content = fs.readFileSync(absPath, "utf-8");
       content += `\n## Research Phase\n\n${resultA || "[Agent A research failed]"}\n\n${resultB || "[Agent B research failed]"}\n\n---\n\n## Discussion\n`;
       content = updateFrontmatter(content, {
-        status: "discussing",
+        status: STATUS.DISCUSSING,
         turn: "A",
         round: "1",
         last_updated: new Date().toISOString(),
       });
       fs.writeFileSync(absPath, content);
 
-      gitCommit(
-        absPath,
-        "discuss: initial research complete",
-        gitMode === "every_turn" ? "every_turn" : "none"
-      );
+      gitCommit(absPath, "discuss: initial research complete", gitMode === "every_turn" ? "every_turn" : "none");
       log("Research phase complete.");
     }
 
@@ -398,29 +426,22 @@ async function main() {
     let round = parseInt(fm.round || "1", 10);
     let status = fm.status;
 
-    while (status === "discussing" && round <= maxRounds) {
+    while (status === STATUS.DISCUSSING && round <= maxRounds) {
       for (const agent of ["A", "B"]) {
         const cli = agentCli[agent];
         log(`Round ${round} — Agent ${agent} (${getProfile(cli).name})...`);
 
         content = fs.readFileSync(absPath, "utf-8");
-        const lens = agent === "A" ? fm.agent_a_lens : fm.agent_b_lens;
-        const prompt = buildTurnPrompt(topic, agent, lens, content, round);
+        const prompt = buildTurnPrompt(agent, content, round);
 
-        let result = runAgent(prompt, cli, tmpDir, cwd);
-
-        // Validate with retry
-        if (!validateResponse(result, round)) {
-          log(`Agent ${agent} output failed validation, retrying...`);
-          const retryPrompt =
-            prompt +
-            "\n\nIMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.";
-          result = runAgent(retryPrompt, cli, tmpDir, cwd);
-
-          if (!validateResponse(result, round)) {
-            log(`Agent ${agent} retry also failed. Appending raw output.`);
-          }
-        }
+        const result = runWithRetry(
+          prompt,
+          (r) => validateResponse(r, round),
+          "IMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.",
+          cli,
+          tmpDir,
+          cwd
+        );
 
         // Append
         content = fs.readFileSync(absPath, "utf-8");
@@ -441,20 +462,20 @@ async function main() {
         // Convergence check (round 3+)
         if (round >= 3 && result) {
           const conv = extractConvergence(result);
-          if (conv === "DEADLOCKED") {
+          if (conv === CONVERGENCE.DEADLOCKED) {
             log("DEADLOCKED — moving to consensus.");
-            status = "deadlock";
+            status = STATUS.DEADLOCK;
             break;
           }
-          if ((conv === "CONVERGING" || conv === "PARALLEL") && agent === "B") {
+          if ((conv === CONVERGENCE.CONVERGING || conv === CONVERGENCE.PARALLEL) && agent === "B") {
             log(`${conv} — both agents aligned, moving to consensus.`);
-            status = "converged";
+            status = STATUS.CONVERGED;
             break;
           }
         }
       }
 
-      if (status !== "discussing") break;
+      if (status !== STATUS.DISCUSSING) break;
 
       round++;
       if (round > maxRounds) {
@@ -464,27 +485,22 @@ async function main() {
     }
 
     // Phase 3: Consensus
-    // Use Agent A's CLI for consensus writing (arbitrary choice — it has the full context)
-    if (status !== "consensus") {
+    if (status !== STATUS.CONSENSUS) {
       log("Phase 3: Writing consensus...");
       content = fs.readFileSync(absPath, "utf-8");
-      const consensusPrompt = buildConsensusPrompt(content);
-      let consensus = runAgent(consensusPrompt, cliA, tmpDir, cwd);
 
-      if (!validateConsensus(consensus)) {
-        log("Consensus failed validation, retrying...");
-        consensus = runAgent(
-          consensusPrompt +
-            "\n\nIMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items, and Confidence.",
-          cliA,
-          tmpDir,
-          cwd
-        );
-      }
+      const consensus = runWithRetry(
+        buildConsensusPrompt(content),
+        validateConsensus,
+        "IMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items & Risks, and Confidence.",
+        cliA,
+        tmpDir,
+        cwd
+      );
 
       content = fs.readFileSync(absPath, "utf-8");
       content += `\n${consensus || "[Consensus generation failed — manual synthesis needed]"}\n`;
-      const finalStatus = status === "deadlock" ? "deadlock" : "consensus";
+      const finalStatus = status === STATUS.DEADLOCK ? STATUS.DEADLOCK : STATUS.CONSENSUS;
       content = updateFrontmatter(content, {
         status: finalStatus,
         last_updated: new Date().toISOString(),
@@ -499,14 +515,13 @@ async function main() {
     log(`Discussion complete. Status: ${finalFm.status}`);
     log(`File: ${absPath}`);
 
-    // Print summary to stdout for the orchestrating caller to read
+    // Print summary to stdout
     const finalContent = fs.readFileSync(absPath, "utf-8");
     const consensusMatch = finalContent.match(/## Consensus Summary[\s\S]*$/);
     if (consensusMatch) {
       console.log(consensusMatch[0]);
     }
   } finally {
-    // Cleanup
     fs.rmSync(tmpDir, { recursive: true, force: true });
     log("Temp directory cleaned up.");
   }
