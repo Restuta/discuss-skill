@@ -313,6 +313,66 @@ function gitCommit(filePath, message, mode) {
   }
 }
 
+// --- Output formatting ---
+
+function formatSummary(fileContent, fm, roundsCompleted, filePath) {
+  const finalFm = parseFrontmatter(fileContent);
+  const agentA = finalFm.agent_a || "Agent A";
+  const agentB = finalFm.agent_b || "Agent B";
+  const statusLabel = finalFm.status === STATUS.DEADLOCK ? "DEADLOCK" : "CONSENSUS";
+
+  // Extract sections from consensus
+  const decisionMatch = fileContent.match(/### Decision\n([\s\S]*?)(?=\n### )/);
+  const decision = decisionMatch ? decisionMatch[1].trim() : "[No decision found]";
+
+  const contentionMatch = fileContent.match(/### Key Contention Points\n([\s\S]*?)(?=\n### )/);
+  const contentionTable = contentionMatch ? contentionMatch[1].trim() : "";
+
+  const unresolvedMatch = fileContent.match(/### Unresolved Items[^\n]*\n([\s\S]*?)(?=\n### )/);
+  const unresolved = unresolvedMatch ? unresolvedMatch[1].trim() : "";
+
+  const confidenceMatch = fileContent.match(/### Confidence: (.+)\n(.*)/);
+  const confidence = confidenceMatch ? confidenceMatch[1].trim() : "Unknown";
+  const confidenceReason = confidenceMatch ? confidenceMatch[2].trim() : "";
+
+  const lines = [];
+
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  lines.push(`  COUNCIL ${statusLabel}  —  ${agentA} vs ${agentB}  —  ${roundsCompleted} rounds`);
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  lines.push("");
+
+  lines.push("## Decision");
+  lines.push("");
+  lines.push(decision);
+  lines.push("");
+
+  if (contentionTable) {
+    lines.push("## Key Disagreements");
+    lines.push("");
+    lines.push(contentionTable);
+    lines.push("");
+  }
+
+  if (unresolved) {
+    lines.push("## Unresolved");
+    lines.push("");
+    lines.push(unresolved);
+    lines.push("");
+  }
+
+  lines.push(`## Confidence: ${confidence}`);
+  if (confidenceReason) {
+    lines.push(confidenceReason);
+  }
+  lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  lines.push(`Full discussion: ${filePath}`);
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+  return lines.join("\n");
+}
+
 // --- Main ---
 
 async function main() {
@@ -505,12 +565,9 @@ async function main() {
     log(`Discussion complete. Status: ${finalFm.status}`);
     log(`File: ${absPath}`);
 
-    // Print summary to stdout
+    // Print formatted summary to stdout
     const finalContent = fs.readFileSync(absPath, "utf-8");
-    const consensusMatch = finalContent.match(/## Consensus Summary[\s\S]*$/);
-    if (consensusMatch) {
-      console.log(consensusMatch[0]);
-    }
+    console.log(formatSummary(finalContent, fm, round, absPath));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     log("Temp directory cleaned up.");
