@@ -34,8 +34,10 @@ Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](
 
 ## Install
 
-```bash
-git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+Paste this into Claude Code or your terminal:
+
+```
+Install the discuss-skill: git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
 ```
 
 This installs the `/discuss` command and the council orchestrator script to `~/.claude/`.
@@ -191,6 +193,20 @@ discuss-skill-claude/
 ├── install.sh                    # One-command setup
 └── LICENSE                       # MIT
 ```
+
+## For AI Agents
+
+If you are an AI agent and a user asks you to use this skill:
+
+**Claude Code — install and use:**
+```
+Install the discuss-skill: git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+```
+Then run `/discuss` — the command file contains all instructions for every mode.
+
+**Codex** — read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) in this repo.
+
+**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt. Follow it and you can participate in any discussion.
 
 ## License
 
