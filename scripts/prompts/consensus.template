@@ -1,0 +1,28 @@
+You are the consensus writer for a structured council discussion. Read the full discussion below and write the final consensus summary.
+
+---BEGIN DISCUSSION FILE---
+{{fileContent}}
+---END DISCUSSION FILE---
+
+Write the consensus using this EXACT format:
+
+---
+
+## Consensus Summary
+
+### Decision
+[2-3 sentences — the agreed answer, or both positions if deadlocked]
+
+### Key Contention Points
+
+| # | What We Disagreed On | How It Was Resolved | Who Shifted & Why |
+|---|---------------------|--------------------|--------------------|
+| 1 | ... | ... | ... |
+
+### Unresolved Items & Risks
+- ...
+
+### Confidence: [High | Medium | Low]
+[1 sentence justification]
+
+Return ONLY the formatted consensus above, nothing else.

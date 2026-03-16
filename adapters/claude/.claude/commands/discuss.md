@@ -5,9 +5,10 @@ A single command for structured, turn-based AI discussions. Supports three modes
 ## Usage
 
 ```
-/discuss "topic" file.md                  → external mode (default): creates discussion file, waits for another AI
-/discuss "topic" file.md --mode council   → council mode: spawns two internal subagents, runs to completion
-/discuss file.md                          → join mode: joins an existing discussion as a participant
+/discuss "topic" file.md                              → external mode (default): creates discussion file, waits for another AI
+/discuss "topic" file.md --mode council               → council mode: orchestrates two Claude instances debating to completion
+/discuss "topic" file.md --mode council --agents claude,codex  → council with cross-model debate (Claude vs Codex)
+/discuss file.md                                      → join mode: joins an existing discussion as a participant
 ```
 
 When invoked, print this to the user so they know what's happening:
@@ -29,7 +30,7 @@ When invoked, print this to the user so they know what's happening:
 
 **For council mode:**
 > Starting council discussion on: "<topic>"
-> Mode: council — two internal agents will debate this
+> Mode: council — orchestrating two independent Claude instances with full reasoning
 > Output: file.md
 > Running...
 
@@ -47,6 +48,7 @@ Parse the user's input to determine the mode:
 
 1. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode council` flag → council mode
+   - Check for `--agents X,Y` flag → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
    - Otherwise → external mode (default)
 2. If **only a file path** is provided and the file exists → join mode
 3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
@@ -65,7 +67,6 @@ Create the discussion file:
 ---
 topic: "<the topic>"
 mode: external
-blind_briefs: true
 max_rounds: 7
 git_commit: final_only
 agent_a: "Claude"
@@ -100,8 +101,6 @@ If the file is inside a git repository, ask the user:
 
 ### Research Phase
 
-If `blind_briefs: true` (default):
-
 Write your blind research immediately using Agent A's lens (risks, costs, failure modes):
 
 ```markdown
@@ -113,10 +112,6 @@ Write your blind research immediately using Agent A's lens (risks, costs, failur
 ```
 
 Update `turn: B` and tell the user you're waiting for the other AI.
-
-If `blind_briefs: false`:
-
-Skip the research phase. Set `status: discussing`, `round: 1`, `turn: A`. Write your first response directly under `## Discussion`.
 
 ### Discussion Phase
 
@@ -135,7 +130,9 @@ For each response turn, follow the **Turn Structure** below.
 
 ## Council Mode (`--mode council`)
 
-Spawns two internal subagents who debate the topic. Runs to completion automatically.
+Orchestrates two independent top-level Claude instances that debate the topic with full reasoning capabilities. Each instance runs as a separate `claude -p` process with `--effort high`, ensuring extended thinking is available for every turn. The orchestrator (you) manages the discussion file, frontmatter, and turn sequencing.
+
+**Why not subagents:** Claude Code subagents do not receive extended thinking blocks. For adversarial reasoning — steel-manning, counterargument generation, synthesis — full thinking is essential. Council mode uses orchestrated instances to guarantee the best available reasoning on every turn.
 
 ### Setup
 
@@ -145,11 +142,12 @@ Create the discussion file with `mode: council`:
 ---
 topic: "<the topic>"
 mode: council
-blind_briefs: true
 max_rounds: 7
 git_commit: final_only
 agent_a: "Claude Agent A"
 agent_b: "Claude Agent B"
+agent_a_cli: "claude"
+agent_b_cli: "claude"
 agent_a_lens: "risk/cost/failure"
 agent_b_lens: "value/opportunity/success"
 status: researching
@@ -169,67 +167,41 @@ last_updated: <ISO 8601 timestamp>
 
 The orchestrator MUST generate the Key Questions from the topic when creating the discussion file.
 
-### Phase 1: Blind Research
+### Cross-model discussions
 
-If `blind_briefs: false`, skip this phase entirely. Set `status: discussing`, `round: 1`, `turn: A` and proceed to Phase 2.
+Council mode supports running different AI CLIs for each agent. Set `agent_a_cli` and `agent_b_cli` in the frontmatter to control which CLI runs each side of the debate. Both default to `"claude"`.
 
-If `blind_briefs: true` (default), spawn **two agents in parallel**:
+Supported CLIs:
+- `claude` — Claude Code CLI (`claude -p --effort high`)
+- `codex` — OpenAI Codex CLI (`codex exec --full-auto`)
 
-**Agent A prompt:**
+When the user specifies `--agents claude,codex` (or similar), parse the comma-separated values and set `agent_a_cli` and `agent_b_cli` accordingly in the frontmatter. Agent names in the frontmatter should reflect the CLI: e.g. `agent_a: "Claude"`, `agent_b: "Codex"`.
+
+Example:
 ```
-You are Agent A in a structured discussion about: "<topic>"
-
-Your analytical lens: Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.
-
-Research this topic independently. Do NOT try to anticipate what another agent might say.
-
-Structure your output as:
-### Agent A — Independent Research | research
-
-[Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
+/discuss "Should we use a monorepo?" monorepo.md --mode council --agents claude,codex
 ```
 
-**Agent B prompt:**
-```
-You are Agent B in a structured discussion about: "<topic>"
+### Orchestration
 
-Your analytical lens: Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.
+Council mode is orchestrated by a Node.js script that handles all process management, validation, and file updates deterministically. The skill file (this document) handles routing and file creation; the script handles execution.
 
-Research this topic independently. Do NOT try to anticipate what another agent might say.
+After creating the discussion file, run the orchestrator:
 
-Structure your output as:
-### Agent B — Independent Research | research
-
-[Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
+```bash
+node ~/.claude/scripts/headless-council.js <discussion-file.md>
 ```
 
-After both return:
-1. Append both under `## Research Phase`
-2. Add `---` separator and `## Discussion`
-3. Update frontmatter: `status: discussing`, `round: 1`, `turn: A`
-4. Git commit if configured: `"discuss: initial research complete"`
+The script:
+1. Reads `agent_a_cli` and `agent_b_cli` from frontmatter (default: `"claude"`)
+2. Runs a preflight check for each required CLI. If any fails, exits with code 2 — fall back to subagent mode and inform the user.
+3. Creates a per-run temp directory (`mktemp -d`) for all prompt/result files
+4. **Phase 1 — Blind Research:** Runs two parallel instances (each using its configured CLI) with opposing lenses. Validates output format. Appends to file.
+5. **Phase 2 — Discussion Rounds:** Alternates Agent A and Agent B turns, each using its own CLI. Validates all required sections. Retries once on malformed output.
+6. **Phase 3 — Consensus:** Generates consensus entry when agents converge, deadlock, or exceed max rounds.
+7. Cleans up temp directory and prints the consensus summary to stdout.
 
-### Phase 2: Discussion Rounds
-
-Loop until consensus or `round > max_rounds`:
-
-**Agent A's turn:** Resume Agent A with the full discussion file content and the Turn Structure section (below) included verbatim in the prompt. The agent must know the exact response format and heading structure.
-After return: append, update `turn: B`, git commit if `every_turn`.
-
-**Agent B's turn:** Resume Agent B with the full discussion file content and the Turn Structure section included verbatim.
-After return: append, update `turn: A`, increment `round`, git commit if `every_turn`.
-
-**Convergence check (round 3+):**
-- Latest assessment is `CONVERGING` or `PARALLEL` → the responding agent MAY write a consensus entry (optional — continue if more refinement is needed)
-- Latest assessment is `DEADLOCKED` → Phase 3 (deadlock)
-- Latest assessment is `DIVERGING` → next round
-- If `round > max_rounds` → Phase 3 (forced synthesis)
-
-### Phase 3: Consensus Summary
-
-The agent whose turn it is writes the consensus entry (see Consensus Format below). In council mode, the orchestrator may write it directly instead of delegating.
-
-Update `status: consensus` (or `status: deadlock`). Git commit if configured. Print summary to terminal.
+The script is at `scripts/headless-council.js`. Zero npm dependencies. Adding a new CLI requires only adding an entry to the `CLI_PROFILES` object in the script.
 
 ---
 

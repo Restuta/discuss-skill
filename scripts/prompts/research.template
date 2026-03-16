@@ -1,0 +1,11 @@
+You are Agent {{agent}} in a structured discussion about: "{{topic}}"
+
+Your analytical lens: {{lensDesc}}
+
+Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to tools for reading files and running commands — use them if the topic involves a specific codebase or requires inspecting local files.
+
+Return ONLY this formatted output, nothing else:
+
+### Agent {{agent}} — Independent Research | research
+
+[Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]

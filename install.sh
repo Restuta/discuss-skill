@@ -25,12 +25,26 @@ if [ ! -d "$CLAUDE_ADAPTER_DIR" ]; then
     exit 1
 fi
 
+# Create scripts directory if needed
+CLAUDE_SCRIPTS_DIR="$HOME/.claude/scripts"
+if [ ! -d "$CLAUDE_SCRIPTS_DIR" ]; then
+    echo "Creating $CLAUDE_SCRIPTS_DIR..."
+    mkdir -p "$CLAUDE_SCRIPTS_DIR"
+fi
+
 echo "Installing Claude Code command..."
 cp "$CLAUDE_ADAPTER_DIR/discuss.md" "$CLAUDE_COMMANDS_DIR/discuss.md"
+
+echo "Installing council orchestrator..."
+cp "$SCRIPT_DIR/scripts/headless-council.js" "$CLAUDE_SCRIPTS_DIR/headless-council.js"
+mkdir -p "$CLAUDE_SCRIPTS_DIR/prompts"
+cp "$SCRIPT_DIR/scripts/prompts/"*.template "$CLAUDE_SCRIPTS_DIR/prompts/"
 
 echo ""
 echo "Installed:"
 echo "  $CLAUDE_COMMANDS_DIR/discuss.md"
+echo "  $CLAUDE_SCRIPTS_DIR/headless-council.js"
+echo "  $CLAUDE_SCRIPTS_DIR/prompts/*.template"
 echo ""
 echo "Usage:"
 echo "  /discuss \"topic\" output.md                  Start external discussion (default)"

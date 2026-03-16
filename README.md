@@ -34,70 +34,77 @@ Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](
 
 ## Install
 
-One line:
-
 ```bash
-curl -o ~/.claude/commands/discuss.md https://raw.githubusercontent.com/Restuta/discuss-skill-claude/main/adapters/claude/.claude/commands/discuss.md
+git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
 ```
 
-That's it. Works in Claude Code immediately.
-
-> **Want the full repo** (protocol docs, examples, Codex adapter)? `git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh`
+This installs the `/discuss` command and the council orchestrator script to `~/.claude/`.
 
 ## How to use it
 
-### Start a discussion
-
-In Claude Code:
+### From Claude Code
 
 ```
-/discuss "Should we use event sourcing for the audit log?" audit-log.md
+/discuss "Should we use event sourcing for the audit log?" audit-log.md --mode council
 ```
 
-It creates the file, does its research as Agent A, and prints a snippet to copy into your other AI.
+That's it. Two Claude instances debate the topic with full extended thinking and produce a consensus. Everything runs from one terminal.
 
-### Get the other AI to join
-
-Paste the snippet into your other AI window (Codex, another Claude, GPT, anything). It looks like:
+For cross-model debates (Claude vs Codex):
 
 ```
-Join the discussion in /absolute/path/to/audit-log.md. Read the file, claim
-Agent B, and follow the protocol in the frontmatter and body.
+/discuss "Should we use a monorepo?" monorepo.md --mode council --agents claude,codex
 ```
 
-If the other AI also has `/discuss` installed:
-```
-/discuss audit-log.md
+### From Codex CLI
+
+Point Codex to the adapter file in this repo:
+
+```bash
+cd /path/to/discuss-skill-claude
+codex "Join the discussion in /path/to/discussion.md. Read the file, claim Agent B, and follow the protocol."
 ```
 
-Both AIs take turns in the same file. No server, no coordination layer — the markdown file is the entire communication channel.
+Or use the `AGENTS.md` instruction file: [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md).
 
-### Modes
+### From any other AI
+
+Any AI that can read markdown and append to a file can participate. Read the protocol: [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained.
+
+## Modes
 
 | What you type | What happens |
 |---|---|
-| `/discuss "topic" file.md` | **External** (default) — creates file, another AI joins via the snippet above |
-| `/discuss "topic" file.md --mode council` | **Council** — spawns two internal agents that debate automatically |
+| `/discuss "topic" file.md --mode council` | **Council** — orchestrates two AI instances debating to completion from one terminal |
+| `/discuss "topic" file.md --mode council --agents claude,codex` | **Council (cross-model)** — Claude vs Codex, same terminal |
+| `/discuss "topic" file.md` | **External** — creates file, another AI joins manually |
 | `/discuss file.md` | **Join** — joins an existing discussion |
+
+Council mode is the recommended default. It runs the full debate automatically with full reasoning capabilities for each agent.
 
 ## How it works
 
 1. **Blind research.** Each agent independently analyzes the topic through an assigned lens — one focuses on risks and failure modes, the other on benefits and opportunities. They don't see each other's work.
 2. **Structured debate.** Agents take turns responding. Every turn requires: steel-manning the other's argument, presenting new evidence, stating confidence with a percentage, and asking one question.
-3. **Convergence.** After round 3, agents assess whether they're converging, diverging, or deadlocked. At round 7 (configurable), they must synthesize or declare deadlock.
+3. **Convergence.** After round 3, agents assess whether they're converging, diverging, or deadlocked. When they converge, the debate ends and consensus is written. Max rounds is configurable (default 7).
 4. **Summary.** A consensus section is appended with: the decision, a contention table showing what was fought over and how it resolved, unresolved items, and a confidence rating.
 
 The whole thing lives in one append-only markdown file. No database, no server, no special runtime.
 
+### Why council mode uses orchestrated instances
+
+Claude Code subagents do not receive extended thinking blocks — they reason via text blocks only. For adversarial reasoning (steel-manning, counterargument generation, synthesis), full thinking is essential. Council mode orchestrates top-level `claude -p --effort high` instances so each debater gets full reasoning capabilities. Cross-model debates use each CLI's headless mode (`codex exec --full-auto` for Codex).
+
 ## Configuration
 
-Settings live in the discussion file's frontmatter. Override per-discussion:
+Settings live in the discussion file's frontmatter:
 
 | Setting | Default | Options |
 |---------|---------|---------|
-| `blind_briefs` | `true` | Skip research phase with `false` for lightweight questions |
 | `max_rounds` | `7` | `1`-`15` — more rounds for complex topics |
 | `git_commit` | `final_only` | `none`, `final_only`, `every_turn` |
+| `agent_a_cli` | `"claude"` | `"claude"`, `"codex"` |
+| `agent_b_cli` | `"claude"` | `"claude"`, `"codex"` |
 
 ## Git integration
 
@@ -109,9 +116,7 @@ If the discussion file is inside a git repo, discussions are automatically commi
 | `every_turn` | Commits after each agent turn | Audit trails, reviewing the debate step-by-step in `git log` |
 | `none` | No commits | Exploratory discussions you might throw away |
 
-When the discussion starts inside a git repo, the agent will ask which mode you want (or you can set `git_commit:` in the frontmatter upfront).
-
-Rules: only the discussion file is staged (never `git add -A`), never auto-pushes, never force-pushes. Your working tree stays clean.
+Rules: only the discussion file is staged (never `git add -A`), never auto-pushes, never force-pushes.
 
 ## You can join too
 
@@ -120,7 +125,25 @@ Humans are first-class participants. Edit the file directly:
 1. Add a `### Human Interjection | human-note` section anywhere
 2. Set `turn:` in the frontmatter to the next agent
 
-Add constraints the AIs don't know about, inject domain context, break ties, or tell them they're both wrong. The triadic structure (two AIs + one human) is often the most productive.
+Add constraints the AIs don't know about, inject domain context, break ties, or tell them they're both wrong.
+
+## Adding new CLIs
+
+The orchestrator supports pluggable CLI profiles. To add a new AI CLI, add an entry to `CLI_PROFILES` in `scripts/headless-council.js`:
+
+```js
+newcli: {
+  name: "NewCLI",
+  binary: "newcli",
+  buildCmd: (promptFile, cwd) =>
+    `cat "${promptFile}" | newcli run --headless`,
+  check: () => {
+    execSync("which newcli", { stdio: "pipe" });
+  },
+},
+```
+
+Then use it: `/discuss "topic" file.md --mode council --agents claude,newcli`
 
 ## Why this exists
 
@@ -148,42 +171,26 @@ For longer notes and additional sources, see [docs/research.md](docs/research.md
 
 ```
 discuss-skill-claude/
+├── scripts/
+│   └── headless-council.js       # Council orchestrator (Node.js, zero deps)
 ├── protocol/
-│   └── discuss-protocol-v1.md     # The protocol spec — source of truth
+│   └── discuss-protocol-v1.md    # The protocol spec — source of truth
 ├── adapters/
 │   ├── claude/.claude/commands/
-│   │   └── discuss.md             # Claude Code skill (all modes)
+│   │   └── discuss.md            # Claude Code skill (all modes)
 │   └── codex/
-│       └── AGENTS.md              # Codex instruction file
+│       └── AGENTS.md             # Codex instruction file
 ├── templates/
-│   └── discussion-template.md     # Standalone template for reference
+│   └── discussion-template.md    # Standalone template for reference
 ├── docs/
-│   └── research.md                # Research citations & longer notes
+│   └── research.md               # Research citations & longer notes
 ├── examples/
-│   ├── full-discussion.md         # Complete consensus example
-│   └── deadlock-example.md        # Productive deadlock example
-├── PRODUCT.md                     # Design decisions & roadmap
-├── install.sh                     # One-command setup for Claude Code
-└── LICENSE                        # MIT
+│   ├── full-discussion.md        # Complete consensus example
+│   └── deadlock-example.md       # Productive deadlock example
+├── PRODUCT.md                    # Design decisions & roadmap
+├── install.sh                    # One-command setup
+└── LICENSE                       # MIT
 ```
-
-The protocol document is the product. Adapters are boring glue. If a new AI tool appears tomorrow, it participates by reading the protocol — no code changes needed.
-
----
-
-## For AI Agents
-
-If you are an AI agent and a user asks you to use this skill:
-
-**Claude Code — install and use:**
-```bash
-curl -o ~/.claude/commands/discuss.md https://raw.githubusercontent.com/Restuta/discuss-skill-claude/main/adapters/claude/.claude/commands/discuss.md
-```
-Then run `/discuss` — the command file contains all instructions for every mode.
-
-**Codex** — read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) in this repo.
-
-**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt. Follow it and you can participate in any discussion.
 
 ## License
 
