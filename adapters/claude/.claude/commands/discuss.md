@@ -171,19 +171,43 @@ last_updated: <ISO 8601 timestamp>
 
 The orchestrator MUST generate the Key Questions from the topic when creating the discussion file.
 
+### Preflight check
+
+Before the first headless call, verify the CLI is available:
+
+```bash
+which claude && claude --version
+```
+
+If `claude` is not found, not authenticated, or does not support `--effort`, **fall back to the legacy subagent path**: use the Agent tool to spawn subagents as described in the protocol spec. Inform the user:
+> Claude CLI not available for orchestrated council mode. Falling back to subagent mode (reduced reasoning capability).
+
 ### How to run orchestrated instances
 
-Each agent turn is executed as a headless `claude -p` call via the Bash tool. The orchestrator:
+Each agent turn is executed as a headless `claude -p` call via the Bash tool. Before any calls, create a **per-run temp directory** to avoid collisions between concurrent council sessions:
+
+```bash
+DISCUSS_TMP=$(mktemp -d)
+```
+
+All prompt and result files for this discussion go inside `$DISCUSS_TMP`.
+
+The orchestrator:
 
 1. Constructs the prompt (role, lens, discussion file content, format instructions)
-2. Writes the prompt to a temp file to avoid shell argument length limits
-3. Runs: `cat /tmp/discuss-prompt.txt | claude -p --effort high --output-format text`
+2. Writes the prompt to `$DISCUSS_TMP/agent-[A/B]-round-N.txt`
+3. Runs: `cat $DISCUSS_TMP/agent-[A/B]-round-N.txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"`
 4. Captures the output
-5. Validates the output matches the expected heading format (`### Round N — ...` or `### Agent [A/B] — Independent Research | research`)
+5. Validates the output:
+   - Starts with the expected heading (`### Round N — ...` or `### Agent [A/B] — Independent Research | research`)
+   - Contains all required sections for the turn type (for responses: "Response to previous point", "New evidence or angle", "Current position", "Question for"; for round 3+: convergence assessment)
+   - For consensus entries: contains "Decision", "Key Contention Points", "Confidence"
 6. Appends valid output to the discussion file
 7. Updates frontmatter (turn, round, status)
 
-If a headless call returns malformed output (missing required heading, wrong format), retry once with an explicit correction in the prompt. If it fails again, the orchestrator writes a note and continues.
+If a headless call returns malformed output (missing heading or required sections), retry once with an explicit correction in the prompt. If it fails again, the orchestrator writes a note and continues.
+
+Clean up the temp directory when the discussion completes: `rm -rf $DISCUSS_TMP`
 
 ### Phase 1: Blind Research
 
@@ -191,13 +215,13 @@ If `blind_briefs: false`, skip this phase entirely. Set `status: discussing`, `r
 
 If `blind_briefs: true` (default), run **two headless instances in parallel** using the Bash tool:
 
-**Agent A — write this prompt to `/tmp/discuss-agent-a-research.txt`, then run `cat /tmp/discuss-agent-a-research.txt | claude -p --effort high --output-format text > /tmp/discuss-agent-a-result.txt &`:**
+**Agent A — write this prompt to `$DISCUSS_TMP/agent-a-research.txt`, then run `cat $DISCUSS_TMP/agent-a-research.txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash" > $DISCUSS_TMP/agent-a-result.txt &`:**
 ```
 You are Agent A in a structured discussion about: "<topic>"
 
 Your analytical lens: Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.
 
-Research this topic independently. Do NOT try to anticipate what another agent might say. Do NOT use any tools — reason from your knowledge only.
+Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to Read, Grep, Glob, and Bash tools — use them if the topic involves a specific codebase or requires inspecting local files.
 
 Return ONLY this formatted output, nothing else:
 
@@ -206,13 +230,13 @@ Return ONLY this formatted output, nothing else:
 [Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
 ```
 
-**Agent B — write this prompt to `/tmp/discuss-agent-b-research.txt`, then run `cat /tmp/discuss-agent-b-research.txt | claude -p --effort high --output-format text > /tmp/discuss-agent-b-result.txt &`:**
+**Agent B — write this prompt to `$DISCUSS_TMP/agent-b-research.txt`, then run `cat $DISCUSS_TMP/agent-b-research.txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash" > $DISCUSS_TMP/agent-b-result.txt &`:**
 ```
 You are Agent B in a structured discussion about: "<topic>"
 
 Your analytical lens: Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.
 
-Research this topic independently. Do NOT try to anticipate what another agent might say. Do NOT use any tools — reason from your knowledge only.
+Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to Read, Grep, Glob, and Bash tools — use them if the topic involves a specific codebase or requires inspecting local files.
 
 Return ONLY this formatted output, nothing else:
 
@@ -240,11 +264,11 @@ Loop until consensus or `round > max_rounds`:
 3. The Turn Structure format (copied verbatim from the Turn Structure section below)
 4. The Master Prompt principles
 5. For round 3+: instruction to include convergence assessment
-6. Explicit instruction: "Return ONLY your formatted response, nothing else. Do NOT use any tools."
+6. Explicit instruction: "Return ONLY your formatted response, nothing else."
 
-Write the prompt to `/tmp/discuss-round-N-agent-[A/B].txt`, then run:
+Write the prompt to `$DISCUSS_TMP/round-N-agent-[A/B].txt`, then run:
 ```bash
-cat /tmp/discuss-round-N-agent-[A/B].txt | claude -p --effort high --output-format text
+cat $DISCUSS_TMP/round-N-agent-[A/B].txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"
 ```
 
 **Agent A's turn:** Run headless instance with Agent A's prompt.
