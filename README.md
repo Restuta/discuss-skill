@@ -34,10 +34,18 @@ Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](
 
 ## Install
 
-Paste this into Claude Code or your terminal:
+Paste this into Claude Code (or any AI agent):
 
 ```
-Install the discuss-skill: git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+Install the discuss-skill for me: git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+```
+
+Or manually:
+
+```bash
+git clone https://github.com/Restuta/discuss-skill-claude.git
+cd discuss-skill-claude
+bash install.sh
 ```
 
 This installs the `/discuss` command and the council orchestrator script to `~/.claude/`.
