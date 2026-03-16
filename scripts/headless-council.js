@@ -64,11 +64,6 @@ const CLI_PROFILES = {
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });
-      // Auth probe: minimal call to verify credentials
-      execSync('echo "say ok" | claude -p --output-format text --max-turns 1', {
-        stdio: "pipe",
-        timeout: 30000,
-      });
     },
   },
   codex: {
@@ -78,11 +73,6 @@ const CLI_PROFILES = {
       `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -C "${cwd}" -`,
     check: () => {
       execSync("which codex", { stdio: "pipe" });
-      // Auth probe: minimal call to verify credentials
-      execSync('echo "say ok" | codex exec --full-auto --skip-git-repo-check -', {
-        stdio: "pipe",
-        timeout: 30000,
-      });
     },
   },
 };
