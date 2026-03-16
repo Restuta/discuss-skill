@@ -1,0 +1,7 @@
+
+IMPORTANT: Since this is Round {{round}} (3+), you MUST end with a convergence assessment:
+**Convergence assessment:** [CONVERGING|PARALLEL|DIVERGING|DEADLOCKED] — [explanation]
+- CONVERGING — positions within ~80% agreement, name remaining gap
+- PARALLEL — same conclusion, different reasoning
+- DIVERGING — core disagreement on [specific point], state your crux
+- DEADLOCKED — fundamental disagreement, recommend human review

@@ -225,6 +225,19 @@ function extractConvergence(output) {
   return null;
 }
 
+// --- Templates ---
+
+const PROMPTS_DIR = path.join(__dirname, "prompts");
+
+function loadTemplate(name) {
+  const filePath = path.join(PROMPTS_DIR, `${name}.template`);
+  return fs.readFileSync(filePath, "utf-8");
+}
+
+function fillTemplate(template, vars) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+}
+
 // --- Prompt builders ---
 
 function buildResearchPrompt(topic, agent, lens) {
@@ -233,17 +246,7 @@ function buildResearchPrompt(topic, agent, lens) {
       ? "Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic."
       : "Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.";
 
-  return `You are Agent ${agent} in a structured discussion about: "${topic}"
-
-Your analytical lens: ${lensDesc}
-
-Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to tools for reading files and running commands — use them if the topic involves a specific codebase or requires inspecting local files.
-
-Return ONLY this formatted output, nothing else:
-
-### Agent ${agent} — Independent Research | research
-
-[Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]`;
+  return fillTemplate(loadTemplate("research"), { topic, agent, lensDesc });
 }
 
 function buildTurnPrompt(topic, agent, lens, fileContent, round) {
@@ -256,82 +259,21 @@ function buildTurnPrompt(topic, agent, lens, fileContent, round) {
 
   const convergenceInstr =
     round >= 3
-      ? `
-
-IMPORTANT: Since this is Round ${round} (3+), you MUST end with a convergence assessment:
-**Convergence assessment:** [CONVERGING|PARALLEL|DIVERGING|DEADLOCKED] — [explanation]
-- CONVERGING — positions within ~80% agreement, name remaining gap
-- PARALLEL — same conclusion, different reasoning
-- DIVERGING — core disagreement on [specific point], state your crux
-- DEADLOCKED — fundamental disagreement, recommend human review`
+      ? fillTemplate(loadTemplate("convergence"), { round: String(round) })
       : "";
 
-  return `You are Agent ${agent} in a structured council discussion. Your lens: ${lensDesc}
-
-Here is the full discussion file:
-
----BEGIN DISCUSSION FILE---
-${fileContent}
----END DISCUSSION FILE---
-
-PRINCIPLES:
-1. Steel-man first. Restate the other's argument in its strongest form before disagreeing.
-2. Evidence over intuition. "I think" requires "because..." with a concrete reason.
-3. Name your uncertainty. Calibrated confidence: "~70% because..."
-4. Seek the third option. Look for synthesis before arguing your side.
-5. Change your mind visibly. Say so explicitly and explain what shifted.
-6. Stay scoped. Flag tangents as [PARKING LOT], don't chase them.
-7. Be concise. Quality over quantity. Repetition = no progress.
-
-Write your Round ${round} response. You MUST follow this EXACT format:
-
-### Round ${round} — [Your Name] | response | confidence: X%
-
-**Response to previous point:**
-Steel-man their argument first, then agree, disagree, or synthesize.
-Be specific about what convinced you or what you find insufficient.
-
-**New evidence or angle:**
-Something not yet discussed. If nothing new, say so — that's convergence.
-
-**Current position:**
-Where you stand now, confidence %, brief justification.
-
-**Question for ${otherAgent}:**
-One specific question to resolve remaining disagreement.${convergenceInstr}
-
-Return ONLY the formatted response above, nothing else.`;
+  return fillTemplate(loadTemplate("turn"), {
+    agent,
+    lensDesc,
+    fileContent,
+    round: String(round),
+    otherAgent,
+    convergenceInstr,
+  });
 }
 
 function buildConsensusPrompt(fileContent) {
-  return `You are the consensus writer for a structured council discussion. Read the full discussion below and write the final consensus summary.
-
----BEGIN DISCUSSION FILE---
-${fileContent}
----END DISCUSSION FILE---
-
-Write the consensus using this EXACT format:
-
----
-
-## Consensus Summary
-
-### Decision
-[2-3 sentences — the agreed answer, or both positions if deadlocked]
-
-### Key Contention Points
-
-| # | What We Disagreed On | How It Was Resolved | Who Shifted & Why |
-|---|---------------------|--------------------|--------------------|
-| 1 | ... | ... | ... |
-
-### Unresolved Items & Risks
-- ...
-
-### Confidence: [High | Medium | Low]
-[1 sentence justification]
-
-Return ONLY the formatted consensus above, nothing else.`;
+  return fillTemplate(loadTemplate("consensus"), { fileContent });
 }
 
 // --- Git ---
