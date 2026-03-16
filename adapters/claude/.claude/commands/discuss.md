@@ -6,7 +6,7 @@ A single command for structured, turn-based AI discussions. Supports three modes
 
 ```
 /discuss "topic" file.md                  → external mode (default): creates discussion file, waits for another AI
-/discuss "topic" file.md --mode council   → council mode: spawns two internal subagents, runs to completion
+/discuss "topic" file.md --mode council   → council mode: orchestrates two independent Claude instances debating to completion
 /discuss file.md                          → join mode: joins an existing discussion as a participant
 ```
 
@@ -29,7 +29,7 @@ When invoked, print this to the user so they know what's happening:
 
 **For council mode:**
 > Starting council discussion on: "<topic>"
-> Mode: council — two internal agents will debate this
+> Mode: council — orchestrating two independent Claude instances with full reasoning
 > Output: file.md
 > Running...
 
@@ -135,7 +135,9 @@ For each response turn, follow the **Turn Structure** below.
 
 ## Council Mode (`--mode council`)
 
-Spawns two internal subagents who debate the topic. Runs to completion automatically.
+Orchestrates two independent top-level Claude instances that debate the topic with full reasoning capabilities. Each instance runs as a separate `claude -p` process with `--effort high`, ensuring extended thinking is available for every turn. The orchestrator (you) manages the discussion file, frontmatter, and turn sequencing.
+
+**Why not subagents:** Claude Code subagents do not receive extended thinking blocks. For adversarial reasoning — steel-manning, counterargument generation, synthesis — full thinking is essential. Council mode uses orchestrated instances to guarantee the best available reasoning on every turn.
 
 ### Setup
 
@@ -169,55 +171,87 @@ last_updated: <ISO 8601 timestamp>
 
 The orchestrator MUST generate the Key Questions from the topic when creating the discussion file.
 
+### How to run orchestrated instances
+
+Each agent turn is executed as a headless `claude -p` call via the Bash tool. The orchestrator:
+
+1. Constructs the prompt (role, lens, discussion file content, format instructions)
+2. Writes the prompt to a temp file to avoid shell argument length limits
+3. Runs: `cat /tmp/discuss-prompt.txt | claude -p --effort high --output-format text`
+4. Captures the output
+5. Validates the output matches the expected heading format (`### Round N — ...` or `### Agent [A/B] — Independent Research | research`)
+6. Appends valid output to the discussion file
+7. Updates frontmatter (turn, round, status)
+
+If a headless call returns malformed output (missing required heading, wrong format), retry once with an explicit correction in the prompt. If it fails again, the orchestrator writes a note and continues.
+
 ### Phase 1: Blind Research
 
 If `blind_briefs: false`, skip this phase entirely. Set `status: discussing`, `round: 1`, `turn: A` and proceed to Phase 2.
 
-If `blind_briefs: true` (default), spawn **two agents in parallel**:
+If `blind_briefs: true` (default), run **two headless instances in parallel** using the Bash tool:
 
-**Agent A prompt:**
+**Agent A — write this prompt to `/tmp/discuss-agent-a-research.txt`, then run `cat /tmp/discuss-agent-a-research.txt | claude -p --effort high --output-format text > /tmp/discuss-agent-a-result.txt &`:**
 ```
 You are Agent A in a structured discussion about: "<topic>"
 
 Your analytical lens: Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.
 
-Research this topic independently. Do NOT try to anticipate what another agent might say.
+Research this topic independently. Do NOT try to anticipate what another agent might say. Do NOT use any tools — reason from your knowledge only.
 
-Structure your output as:
+Return ONLY this formatted output, nothing else:
+
 ### Agent A — Independent Research | research
 
 [Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
 ```
 
-**Agent B prompt:**
+**Agent B — write this prompt to `/tmp/discuss-agent-b-research.txt`, then run `cat /tmp/discuss-agent-b-research.txt | claude -p --effort high --output-format text > /tmp/discuss-agent-b-result.txt &`:**
 ```
 You are Agent B in a structured discussion about: "<topic>"
 
 Your analytical lens: Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.
 
-Research this topic independently. Do NOT try to anticipate what another agent might say.
+Research this topic independently. Do NOT try to anticipate what another agent might say. Do NOT use any tools — reason from your knowledge only.
 
-Structure your output as:
+Return ONLY this formatted output, nothing else:
+
 ### Agent B — Independent Research | research
 
 [Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
 ```
 
+Run both `&` backgrounded, then `wait` for both to complete. Read the result files.
+
 After both return:
-1. Append both under `## Research Phase`
-2. Add `---` separator and `## Discussion`
-3. Update frontmatter: `status: discussing`, `round: 1`, `turn: A`
-4. Git commit if configured: `"discuss: initial research complete"`
+1. Validate both outputs start with the expected `### Agent [A/B]` heading
+2. Append both under `## Research Phase`
+3. Add `---` separator and `## Discussion`
+4. Update frontmatter: `status: discussing`, `round: 1`, `turn: A`
+5. Git commit if configured: `"discuss: initial research complete"`
 
 ### Phase 2: Discussion Rounds
 
 Loop until consensus or `round > max_rounds`:
 
-**Agent A's turn:** Resume Agent A with the full discussion file content and the Turn Structure section (below) included verbatim in the prompt. The agent must know the exact response format and heading structure.
-After return: append, update `turn: B`, git commit if `every_turn`.
+**For each agent turn**, construct a prompt that includes:
+1. The agent's role and lens
+2. The **full current content** of the discussion file (re-read it fresh each turn)
+3. The Turn Structure format (copied verbatim from the Turn Structure section below)
+4. The Master Prompt principles
+5. For round 3+: instruction to include convergence assessment
+6. Explicit instruction: "Return ONLY your formatted response, nothing else. Do NOT use any tools."
 
-**Agent B's turn:** Resume Agent B with the full discussion file content and the Turn Structure section included verbatim.
-After return: append, update `turn: A`, increment `round`, git commit if `every_turn`.
+Write the prompt to `/tmp/discuss-round-N-agent-[A/B].txt`, then run:
+```bash
+cat /tmp/discuss-round-N-agent-[A/B].txt | claude -p --effort high --output-format text
+```
+
+**Agent A's turn:** Run headless instance with Agent A's prompt.
+After return: validate output format, append to file, update `turn: B`, git commit if `every_turn`.
+
+**Agent B's turn:** Run headless instance with Agent B's prompt.
+After return: validate output format, append to file, update `turn: A`, increment `round`, git commit if `every_turn`.
 
 **Convergence check (round 3+):**
 - Latest assessment is `CONVERGING` or `PARALLEL` → the responding agent MAY write a consensus entry (optional — continue if more refinement is needed)
@@ -227,7 +261,7 @@ After return: append, update `turn: A`, increment `round`, git commit if `every_
 
 ### Phase 3: Consensus Summary
 
-The agent whose turn it is writes the consensus entry (see Consensus Format below). In council mode, the orchestrator may write it directly instead of delegating.
+Run one final headless instance with a prompt that includes the full discussion file and instructions to write the consensus entry (see Consensus Format below). Alternatively, the orchestrator may write the consensus directly by synthesizing the discussion.
 
 Update `status: consensus` (or `status: deadlock`). Git commit if configured. Print summary to terminal.
 
