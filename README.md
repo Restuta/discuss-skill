@@ -206,15 +206,19 @@ discuss-skill-claude/
 
 If you are an AI agent and a user asks you to use this skill:
 
-**Claude Code — install and use:**
+**Claude Code:**
 ```
-Install the discuss-skill: git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
 ```
-Then run `/discuss` — the command file contains all instructions for every mode.
+This installs `/discuss` as a slash command and the council orchestrator to `~/.claude/`. Then run `/discuss` — the command file contains all instructions.
 
-**Codex** — read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) in this repo.
+**Codex:**
+```
+git clone https://github.com/Restuta/discuss-skill-claude.git
+```
+Then read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) — it contains all instructions for participating in discussions. Codex uses `AGENTS.md` files, not slash commands.
 
-**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt. Follow it and you can participate in any discussion.
+**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt.
 
 ## License
 
