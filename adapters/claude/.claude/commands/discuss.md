@@ -171,123 +171,27 @@ last_updated: <ISO 8601 timestamp>
 
 The orchestrator MUST generate the Key Questions from the topic when creating the discussion file.
 
-### Preflight check
+### Orchestration
 
-Before the first headless call, verify the CLI is available:
+Council mode is orchestrated by a Node.js script that handles all process management, validation, and file updates deterministically. The skill file (this document) handles routing and file creation; the script handles execution.
 
-```bash
-which claude && claude --version
-```
-
-If `claude` is not found, not authenticated, or does not support `--effort`, **fall back to the legacy subagent path**: use the Agent tool to spawn subagents as described in the protocol spec. Inform the user:
-> Claude CLI not available for orchestrated council mode. Falling back to subagent mode (reduced reasoning capability).
-
-### How to run orchestrated instances
-
-Each agent turn is executed as a headless `claude -p` call via the Bash tool. Before any calls, create a **per-run temp directory** to avoid collisions between concurrent council sessions:
+After creating the discussion file, run the orchestrator:
 
 ```bash
-DISCUSS_TMP=$(mktemp -d)
+node scripts/headless-council.js <discussion-file.md>
 ```
 
-All prompt and result files for this discussion go inside `$DISCUSS_TMP`.
+The script:
+1. Runs a preflight check (`which claude && claude --version`). If it fails, exits with code 2 — fall back to subagent mode and inform the user: "Claude CLI not available. Falling back to subagent mode (reduced reasoning capability)."
+2. Creates a per-run temp directory (`mktemp -d`) for all prompt/result files
+3. **Phase 1 — Blind Research:** Runs two parallel `claude -p --effort high` instances with opposing lenses. Validates output format (correct heading). Appends to file.
+4. **Phase 2 — Discussion Rounds:** Alternates Agent A and Agent B turns. Each turn gets the full current file content, turn structure, and master prompt principles. Validates all required sections (heading, steel-man, new evidence, position, question; convergence assessment for round 3+). Retries once on malformed output.
+5. **Phase 3 — Consensus:** When agents converge, deadlock, or exceed max rounds, generates a consensus entry with the standard format (Decision, Key Contention Points, Unresolved Items, Confidence).
+6. Cleans up temp directory and prints the consensus summary to stdout.
 
-The orchestrator:
+All headless calls use `--effort high --allowedTools "Read,Grep,Glob,Bash"` so agents can inspect the codebase for repo-specific discussions.
 
-1. Constructs the prompt (role, lens, discussion file content, format instructions)
-2. Writes the prompt to `$DISCUSS_TMP/agent-[A/B]-round-N.txt`
-3. Runs: `cat $DISCUSS_TMP/agent-[A/B]-round-N.txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"`
-4. Captures the output
-5. Validates the output:
-   - Starts with the expected heading (`### Round N — ...` or `### Agent [A/B] — Independent Research | research`)
-   - Contains all required sections for the turn type (for responses: "Response to previous point", "New evidence or angle", "Current position", "Question for"; for round 3+: convergence assessment)
-   - For consensus entries: contains "Decision", "Key Contention Points", "Confidence"
-6. Appends valid output to the discussion file
-7. Updates frontmatter (turn, round, status)
-
-If a headless call returns malformed output (missing heading or required sections), retry once with an explicit correction in the prompt. If it fails again, the orchestrator writes a note and continues.
-
-Clean up the temp directory when the discussion completes: `rm -rf $DISCUSS_TMP`
-
-### Phase 1: Blind Research
-
-If `blind_briefs: false`, skip this phase entirely. Set `status: discussing`, `round: 1`, `turn: A` and proceed to Phase 2.
-
-If `blind_briefs: true` (default), run **two headless instances in parallel** using the Bash tool:
-
-**Agent A — write this prompt to `$DISCUSS_TMP/agent-a-research.txt`, then run `cat $DISCUSS_TMP/agent-a-research.txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash" > $DISCUSS_TMP/agent-a-result.txt &`:**
-```
-You are Agent A in a structured discussion about: "<topic>"
-
-Your analytical lens: Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.
-
-Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to Read, Grep, Glob, and Bash tools — use them if the topic involves a specific codebase or requires inspecting local files.
-
-Return ONLY this formatted output, nothing else:
-
-### Agent A — Independent Research | research
-
-[Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
-```
-
-**Agent B — write this prompt to `$DISCUSS_TMP/agent-b-research.txt`, then run `cat $DISCUSS_TMP/agent-b-research.txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash" > $DISCUSS_TMP/agent-b-result.txt &`:**
-```
-You are Agent B in a structured discussion about: "<topic>"
-
-Your analytical lens: Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.
-
-Research this topic independently. Do NOT try to anticipate what another agent might say. You have access to Read, Grep, Glob, and Bash tools — use them if the topic involves a specific codebase or requires inspecting local files.
-
-Return ONLY this formatted output, nothing else:
-
-### Agent B — Independent Research | research
-
-[Your analysis. Be specific, cite evidence, name uncertainties. ~200 words.]
-```
-
-Run both `&` backgrounded, then `wait` for both to complete. Read the result files.
-
-After both return:
-1. Validate both outputs start with the expected `### Agent [A/B]` heading
-2. Append both under `## Research Phase`
-3. Add `---` separator and `## Discussion`
-4. Update frontmatter: `status: discussing`, `round: 1`, `turn: A`
-5. Git commit if configured: `"discuss: initial research complete"`
-
-### Phase 2: Discussion Rounds
-
-Loop until consensus or `round > max_rounds`:
-
-**For each agent turn**, construct a prompt that includes:
-1. The agent's role and lens
-2. The **full current content** of the discussion file (re-read it fresh each turn)
-3. The Turn Structure format (copied verbatim from the Turn Structure section below)
-4. The Master Prompt principles
-5. For round 3+: instruction to include convergence assessment
-6. Explicit instruction: "Return ONLY your formatted response, nothing else."
-
-Write the prompt to `$DISCUSS_TMP/round-N-agent-[A/B].txt`, then run:
-```bash
-cat $DISCUSS_TMP/round-N-agent-[A/B].txt | claude -p --effort high --output-format text --allowedTools "Read,Grep,Glob,Bash"
-```
-
-**Agent A's turn:** Run headless instance with Agent A's prompt.
-After return: validate output format, append to file, update `turn: B`, git commit if `every_turn`.
-
-**Agent B's turn:** Run headless instance with Agent B's prompt.
-After return: validate output format, append to file, update `turn: A`, increment `round`, git commit if `every_turn`.
-
-**Convergence check (round 3+):**
-- Latest assessment is `CONVERGING` or `PARALLEL` → the responding agent MAY write a consensus entry (optional — continue if more refinement is needed)
-- Latest assessment is `DEADLOCKED` → Phase 3 (deadlock)
-- Latest assessment is `DIVERGING` → next round
-- If `round > max_rounds` → Phase 3 (forced synthesis)
-
-### Phase 3: Consensus Summary
-
-Run one final headless instance with a prompt that includes the full discussion file and instructions to write the consensus entry (see Consensus Format below). Alternatively, the orchestrator may write the consensus directly by synthesizing the discussion.
-
-Update `status: consensus` (or `status: deadlock`). Git commit if configured. Print summary to terminal.
+The script is at `scripts/headless-council.js` in the discuss-skill repo. It uses only Node.js built-ins (no npm dependencies).
 
 ---
 
