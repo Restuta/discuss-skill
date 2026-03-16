@@ -313,13 +313,11 @@ async function main() {
     const topic = fm.topic;
     const maxRounds = parseInt(fm.max_rounds || "7", 10);
     const gitMode = fm.git_commit || "final_only";
-    const blindBriefs = fm.blind_briefs !== "false";
-
     log(`Topic: ${topic}`);
-    log(`Max rounds: ${maxRounds}, Git: ${gitMode}, Blind briefs: ${blindBriefs}`);
+    log(`Max rounds: ${maxRounds}, Git: ${gitMode}`);
 
     // Phase 1: Blind Research
-    if (blindBriefs && fm.status === "researching") {
+    if (fm.status === "researching") {
       log("Phase 1: Blind research (parallel)...");
 
       const promptA = buildResearchPrompt(topic, "A", fm.agent_a_lens);

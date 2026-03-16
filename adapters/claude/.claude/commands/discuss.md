@@ -65,7 +65,6 @@ Create the discussion file:
 ---
 topic: "<the topic>"
 mode: external
-blind_briefs: true
 max_rounds: 7
 git_commit: final_only
 agent_a: "Claude"
@@ -100,8 +99,6 @@ If the file is inside a git repository, ask the user:
 
 ### Research Phase
 
-If `blind_briefs: true` (default):
-
 Write your blind research immediately using Agent A's lens (risks, costs, failure modes):
 
 ```markdown
@@ -113,10 +110,6 @@ Write your blind research immediately using Agent A's lens (risks, costs, failur
 ```
 
 Update `turn: B` and tell the user you're waiting for the other AI.
-
-If `blind_briefs: false`:
-
-Skip the research phase. Set `status: discussing`, `round: 1`, `turn: A`. Write your first response directly under `## Discussion`.
 
 ### Discussion Phase
 
@@ -147,7 +140,6 @@ Create the discussion file with `mode: council`:
 ---
 topic: "<the topic>"
 mode: council
-blind_briefs: true
 max_rounds: 7
 git_commit: final_only
 agent_a: "Claude Agent A"
