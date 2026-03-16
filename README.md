@@ -37,7 +37,7 @@ Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](
 Paste this into Claude Code (or any AI agent):
 
 ```
-Install the discuss-skill for me: git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+Install the discuss-skill from https://github.com/Restuta/discuss-skill-claude — read the "For AI Agents" section in the README for instructions.
 ```
 
 Or manually:
