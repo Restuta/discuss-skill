@@ -448,7 +448,8 @@ async function main() {
           }
           if ((conv === "CONVERGING" || conv === "PARALLEL") && agent === "B") {
             log(`${conv} — both agents aligned, moving to consensus.`);
-            break; // Exit discussion loop, Phase 3 will write consensus
+            status = "converged";
+            break;
           }
         }
       }
