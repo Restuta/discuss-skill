@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+
+# Editors
+*.swp
+*.swo
+*~
+
+# Node
+node_modules/
+
+# Test artifacts
+test-*.md
+
+# Discussion files (keep examples/, ignore ad-hoc discussions)
+council-mode-v2.md
+code-review.md
