@@ -37,14 +37,14 @@ Full examples: [consensus](examples/full-discussion.md) | [productive deadlock](
 Paste this into Claude Code (or any AI agent):
 
 ```
-Install the discuss-skill from https://github.com/Restuta/discuss-skill-claude — read the "For AI Agents" section in the README for instructions.
+Install the discuss-skill from https://github.com/Restuta/discuss-skill — read the "For AI Agents" section in the README for instructions.
 ```
 
 Or manually:
 
 ```bash
-git clone https://github.com/Restuta/discuss-skill-claude.git
-cd discuss-skill-claude
+git clone https://github.com/Restuta/discuss-skill.git
+cd discuss-skill
 bash install.sh
 ```
 
@@ -71,7 +71,7 @@ For cross-model debates (Claude vs Codex):
 Point Codex to the adapter file in this repo:
 
 ```bash
-cd /path/to/discuss-skill-claude
+cd /path/to/discuss-skill
 codex "Join the discussion in /path/to/discussion.md. Read the file, claim Agent B, and follow the protocol."
 ```
 
@@ -180,7 +180,7 @@ For longer notes and additional sources, see [docs/research.md](docs/research.md
 ## Project structure
 
 ```
-discuss-skill-claude/
+discuss-skill/
 ├── scripts/
 │   └── headless-council.js       # Council orchestrator (Node.js, zero deps)
 ├── protocol/
@@ -208,13 +208,13 @@ If you are an AI agent and a user asks you to use this skill:
 
 **Claude Code:**
 ```
-git clone https://github.com/Restuta/discuss-skill-claude.git && cd discuss-skill-claude && bash install.sh
+git clone https://github.com/Restuta/discuss-skill.git && cd discuss-skill && bash install.sh
 ```
 This installs `/discuss` as a slash command and the council orchestrator to `~/.claude/`. Then run `/discuss` — the command file contains all instructions.
 
 **Codex:**
 ```
-git clone https://github.com/Restuta/discuss-skill-claude.git
+git clone https://github.com/Restuta/discuss-skill.git
 ```
 Then read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) — it contains all instructions for participating in discussions. Codex uses `AGENTS.md` files, not slash commands.
 
