@@ -55,7 +55,7 @@ This installs the `/discuss` command and the council orchestrator script to `~/.
 ### From Claude Code
 
 ```
-/discuss "Should we use event sourcing for the audit log?" audit-log.md --mode council
+/discuss "Should we use event sourcing for the audit log?" audit-log.md
 ```
 
 That's it. Two AI instances debate the topic with full reasoning and produce a consensus. Everything runs from one terminal — no copy-pasting between windows, no manual coordination.
@@ -63,7 +63,7 @@ That's it. Two AI instances debate the topic with full reasoning and produce a c
 By default, both debaters are Claude (Opus with extended thinking). To run a cross-model debate:
 
 ```
-/discuss "Should we use a monorepo?" monorepo.md --mode council --agents claude,codex
+/discuss "Should we use a monorepo?" monorepo.md --agents claude,codex
 ```
 
 ### From Codex CLI
@@ -84,7 +84,7 @@ Any AI that can read markdown and append to a file can participate. Read the pro
 ## Command reference
 
 ```
-/discuss "topic" file.md [--mode MODE] [--agents CLI_A,CLI_B]
+/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B]
 /discuss file.md
 ```
 
@@ -92,8 +92,8 @@ Any AI that can read markdown and append to a file can participate. Read the pro
 
 | Mode | Description |
 |---|---|
-| `council` | Orchestrates two AI instances debating to completion from one terminal. **Recommended.** |
-| `external` | Creates a discussion file, waits for another AI to join manually. Default when `--mode` is omitted. |
+| `council` | Orchestrates two AI instances debating to completion from one terminal. **Default.** |
+| `external` | Creates a discussion file, waits for another AI to join manually. Use when you want a different AI to participate via a separate terminal. |
 
 When you provide only a file path (`/discuss file.md`), you join an existing discussion.
 

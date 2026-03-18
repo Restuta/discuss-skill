@@ -5,9 +5,9 @@ A single command for structured, turn-based AI discussions. Supports three modes
 ## Usage
 
 ```
-/discuss "topic" file.md                              → external mode (default): creates discussion file, waits for another AI
-/discuss "topic" file.md --mode council               → council mode: orchestrates two Claude instances debating to completion
-/discuss "topic" file.md --mode council --agents claude,codex  → council with cross-model debate (Claude vs Codex)
+/discuss "topic" file.md                              → council mode (default): orchestrates two Claude instances debating to completion
+/discuss "topic" file.md --agents claude,codex        → council with cross-model debate (Claude vs Codex)
+/discuss "topic" file.md --mode external              → external mode: creates discussion file, waits for another AI to join manually
 /discuss file.md                                      → join mode: joins an existing discussion as a participant
 ```
 
@@ -47,9 +47,9 @@ When invoked, print this to the user so they know what's happening:
 Parse the user's input to determine the mode:
 
 1. If a **topic string in quotes** AND a **file path** are provided:
-   - Check for `--mode council` flag → council mode
+   - Check for `--mode external` flag → external mode
    - Check for `--agents X,Y` flag → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
-   - Otherwise → external mode (default)
+   - Otherwise → council mode (default)
 2. If **only a file path** is provided and the file exists → join mode
 3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
 
