@@ -58,9 +58,9 @@ This installs the `/discuss` command and the council orchestrator script to `~/.
 /discuss "Should we use event sourcing for the audit log?" audit-log.md --mode council
 ```
 
-That's it. Two Claude instances debate the topic with full extended thinking and produce a consensus. Everything runs from one terminal.
+That's it. Two AI instances debate the topic with full reasoning and produce a consensus. Everything runs from one terminal — no copy-pasting between windows, no manual coordination.
 
-For cross-model debates (Claude vs Codex):
+By default, both debaters are Claude (Opus with extended thinking). To run a cross-model debate:
 
 ```
 /discuss "Should we use a monorepo?" monorepo.md --mode council --agents claude,codex
@@ -81,16 +81,36 @@ Or use the `AGENTS.md` instruction file: [`adapters/codex/AGENTS.md`](adapters/c
 
 Any AI that can read markdown and append to a file can participate. Read the protocol: [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained.
 
-## Modes
+## Command reference
 
-| What you type | What happens |
+```
+/discuss "topic" file.md [--mode MODE] [--agents CLI_A,CLI_B]
+/discuss file.md
+```
+
+### Modes (`--mode`)
+
+| Mode | Description |
 |---|---|
-| `/discuss "topic" file.md --mode council` | **Council** — orchestrates two AI instances debating to completion from one terminal |
-| `/discuss "topic" file.md --mode council --agents claude,codex` | **Council (cross-model)** — Claude vs Codex, same terminal |
-| `/discuss "topic" file.md` | **External** — creates file, another AI joins manually |
-| `/discuss file.md` | **Join** — joins an existing discussion |
+| `council` | Orchestrates two AI instances debating to completion from one terminal. **Recommended.** |
+| `external` | Creates a discussion file, waits for another AI to join manually. Default when `--mode` is omitted. |
 
-Council mode is the recommended default. It runs the full debate automatically with full reasoning capabilities for each agent.
+When you provide only a file path (`/discuss file.md`), you join an existing discussion.
+
+### Agents (`--agents`)
+
+Optional. Controls which AI CLI runs each side of the debate in council mode.
+
+| Value | What runs |
+|---|---|
+| *(omitted)* | Both agents use Claude (`claude -p --effort high`). This is the default. |
+| `claude,codex` | Agent A = Claude, Agent B = Codex |
+| `codex,claude` | Agent A = Codex, Agent B = Claude |
+| `codex,codex` | Both agents use Codex |
+
+### Design philosophy
+
+There are no flags for model selection, effort level, or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort high` (full extended thinking), Codex gets `--full-auto`. The tool is biased toward the best possible outcome, not configurability.
 
 ## How it works
 
@@ -101,20 +121,18 @@ Council mode is the recommended default. It runs the full debate automatically w
 
 The whole thing lives in one append-only markdown file. No database, no server, no special runtime.
 
-### Why council mode uses orchestrated instances
+### Why orchestrated instances, not subagents
 
-Claude Code subagents do not receive extended thinking blocks — they reason via text blocks only. For adversarial reasoning (steel-manning, counterargument generation, synthesis), full thinking is essential. Council mode orchestrates top-level `claude -p --effort high` instances so each debater gets full reasoning capabilities. Cross-model debates use each CLI's headless mode (`codex exec --full-auto` for Codex).
+Claude Code subagents do not receive extended thinking blocks — they reason via text blocks only. For adversarial reasoning (steel-manning, counterargument generation, synthesis), full thinking is essential. Council mode orchestrates top-level CLI instances so each debater gets the best reasoning its CLI can provide. This is an implementation detail you never need to think about — it just means council mode produces better output than if it used subagents internally.
 
 ## Configuration
 
-Settings live in the discussion file's frontmatter:
+Settings live in the discussion file's frontmatter. You rarely need to change these — the defaults work well.
 
 | Setting | Default | Options |
 |---------|---------|---------|
 | `max_rounds` | `7` | `1`-`15` — more rounds for complex topics |
 | `git_commit` | `final_only` | `none`, `final_only`, `every_turn` |
-| `agent_a_cli` | `"claude"` | `"claude"`, `"codex"` |
-| `agent_b_cli` | `"claude"` | `"claude"`, `"codex"` |
 
 ## Git integration
 
