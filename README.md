@@ -60,7 +60,7 @@ This installs the `/discuss` command and the council orchestrator script to `~/.
 
 That's it. Two AI instances debate the topic with full reasoning and produce a consensus. Everything runs from one terminal — no copy-pasting between windows, no manual coordination.
 
-By default, both debaters are Claude (Opus with extended thinking). To run a cross-model debate:
+By default, both debaters use the same AI you're running the command in — two Claudes in Claude Code, two Codex instances in Codex. To run a cross-model debate:
 
 ```
 /discuss "Should we use a monorepo?" monorepo.md --agents claude,codex
@@ -103,14 +103,14 @@ Optional. Controls which AI CLI runs each side of the debate in council mode.
 
 | Value | What runs |
 |---|---|
-| *(omitted)* | Both agents use Claude (`claude -p --effort high`). This is the default. |
+| *(omitted)* | Both agents use the same AI you're running in. Two Claudes in Claude Code, two Codex in Codex. |
 | `claude,codex` | Agent A = Claude, Agent B = Codex |
 | `codex,claude` | Agent A = Codex, Agent B = Claude |
 | `codex,codex` | Both agents use Codex |
 
 ### Design philosophy
 
-There are no flags for model selection, effort level, or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort high` (full extended thinking), Codex gets `--full-auto`. The tool is biased toward the best possible outcome, not configurability.
+There are no flags for model selection, effort level, or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort high` (full extended thinking), Codex gets `--full-auto`. The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. The tool is biased toward the best possible outcome, not configurability.
 
 ## How it works
 
