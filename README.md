@@ -110,7 +110,7 @@ Optional. Controls which AI CLI runs each side of the debate in council mode.
 
 ### Design philosophy
 
-There are no flags for model selection, effort level, or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort high` (full extended thinking), Codex gets `--full-auto`. The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. The tool is biased toward the best possible outcome, not configurability.
+There are no flags for model selection, effort level, or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort max` (maximum extended thinking), Codex gets `--full-auto`. The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. The tool is biased toward the best possible outcome, not configurability.
 
 ## How it works
 
