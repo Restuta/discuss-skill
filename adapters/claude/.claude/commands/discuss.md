@@ -48,8 +48,8 @@ Parse the user's input to determine the mode:
 
 1. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode external` flag → external mode
-   - Check for `--agents X,Y` flag → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
-   - Check for `--lens LENS_ID` flag → set `lens_id` directly, skip picker
+   - Check for `--agents X,Y` flag (council mode only) → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
+   - Check for `--lens LENS_ID` flag (council mode only) → set `lens_id` directly, skip picker. Valid IDs: `risk-vs-opportunity`, `simplicity-vs-correctness`, `speed-vs-maintainability`. If the ID is invalid, error: "Unknown lens '[value]'. Available: risk-vs-opportunity, simplicity-vs-correctness, speed-vs-maintainability"
    - Otherwise → council mode (default)
 2. If **only a file path** is provided and the file exists → join mode
 3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"

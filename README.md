@@ -110,7 +110,7 @@ Optional. Controls which AI CLI runs each side of the debate in council mode.
 
 ### Lens (`--lens`)
 
-Optional. Controls the analytical lens pair — what each agent focuses on during research. If omitted, the tool shows a picker with a recommendation based on your topic.
+Optional. Council mode only. Controls the analytical lens pair — what each agent focuses on during research. If omitted, the tool shows a picker with a recommendation based on your topic.
 
 | Lens ID | Agent A focuses on | Agent B focuses on | Best for |
 |---|---|---|---|
