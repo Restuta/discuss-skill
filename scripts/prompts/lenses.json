@@ -1,0 +1,50 @@
+{
+  "pairs": [
+    {
+      "id": "risk-vs-opportunity",
+      "name": "Risk vs Opportunity",
+      "description": "General-purpose. One agent stress-tests, the other advocates.",
+      "agent_a": {
+        "label": "risk/cost/failure",
+        "research": "Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.",
+        "turn": "RISKS, COSTS, FAILURE MODES. Be the skeptic."
+      },
+      "agent_b": {
+        "label": "value/opportunity/success",
+        "research": "Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.",
+        "turn": "BENEFITS, OPPORTUNITIES, SUCCESS CASES. Be the advocate."
+      }
+    },
+    {
+      "id": "simplicity-vs-correctness",
+      "name": "Simplicity vs Correctness",
+      "description": "Architecture and design. One agent favors the simple path, the other demands rigor.",
+      "agent_a": {
+        "label": "simplicity/pragmatism",
+        "research": "Focus on SIMPLICITY, PRAGMATISM, and minimal viable solutions. Argue for the approach that is easiest to build, understand, and maintain. Challenge unnecessary complexity.",
+        "turn": "SIMPLICITY, PRAGMATISM. Favor the simpler path."
+      },
+      "agent_b": {
+        "label": "correctness/rigor",
+        "research": "Focus on CORRECTNESS, RIGOR, and handling all edge cases properly. Argue for the approach that is most technically sound, even if more complex. Challenge shortcuts that sacrifice reliability.",
+        "turn": "CORRECTNESS, RIGOR. Demand the thorough approach."
+      }
+    },
+    {
+      "id": "speed-vs-maintainability",
+      "name": "Speed vs Maintainability",
+      "description": "Roadmap and refactoring. One agent pushes to ship now, the other builds for the long term.",
+      "agent_a": {
+        "label": "speed/ship-now",
+        "research": "Focus on SPEED TO SHIP, time-to-value, and pragmatic shortcuts. Argue for getting something working and in users' hands fast. Challenge gold-plating and premature abstraction.",
+        "turn": "SPEED, SHIP NOW. Prioritize time-to-value."
+      },
+      "agent_b": {
+        "label": "maintainability/long-term",
+        "research": "Focus on MAINTAINABILITY, long-term cost, and sustainable architecture. Argue for investments that pay off over time. Challenge shortcuts that create tech debt.",
+        "turn": "MAINTAINABILITY, LONG-TERM. Build to last."
+      }
+    }
+  ],
+  "default": "risk-vs-opportunity"
+}

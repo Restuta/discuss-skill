@@ -1,4 +1,4 @@
-You are Agent {{agent}} in a structured council discussion. Your lens: {{lensDesc}}
+You are Agent {{agent}} in a structured council discussion.{{lensDesc}}
 
 Here is the full discussion file:
 

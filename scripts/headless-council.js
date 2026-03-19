@@ -40,16 +40,35 @@ const STATUS = {
   CONVERGED: "converged",
 };
 
-const LENS_DESC = {
-  A: {
-    research: "Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Be the skeptic.",
-    turn: "RISKS, COSTS, FAILURE MODES. Be the skeptic.",
-  },
-  B: {
-    research: "Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Be the advocate.",
-    turn: "BENEFITS, OPPORTUNITIES, SUCCESS CASES. Be the advocate.",
-  },
-};
+// --- Lens Registry ---
+// Loaded from lenses.json. Each pair defines research and turn prompts for both agents.
+
+const LENSES_PATH = path.join(__dirname, "prompts", "lenses.json");
+let LENSES;
+try {
+  LENSES = JSON.parse(fs.readFileSync(LENSES_PATH, "utf-8"));
+} catch (err) {
+  console.error(`Failed to load lens registry: ${LENSES_PATH}`);
+  console.error(err.code === "ENOENT" ? "File not found. Re-run install.sh." : err.message);
+  process.exit(1);
+}
+
+function getLensPair(lensId) {
+  const pair = LENSES.pairs.find((p) => p.id === lensId);
+  if (!pair) {
+    const valid = LENSES.pairs.map((p) => p.id).join(", ");
+    throw new Error(`Unknown lens "${lensId}". Available: ${valid}`);
+  }
+  return pair;
+}
+
+function getLensDesc(lensId) {
+  const pair = getLensPair(lensId);
+  return {
+    A: { research: pair.agent_a.research, turn: pair.agent_a.turn },
+    B: { research: pair.agent_b.research, turn: pair.agent_b.turn },
+  };
+}
 
 // --- CLI Profiles ---
 // Each profile defines how to invoke a specific AI CLI in headless mode.
@@ -269,11 +288,11 @@ function fillTemplate(template, vars) {
 
 // --- Prompt builders ---
 
-function buildResearchPrompt(topic, agent) {
+function buildResearchPrompt(topic, agent, lensDesc) {
   return fillTemplate(loadTemplate("research"), {
     topic,
     agent,
-    lensDesc: LENS_DESC[agent].research,
+    lensDesc: lensDesc[agent].research,
   });
 }
 
@@ -284,9 +303,10 @@ function buildTurnPrompt(agent, fileContent, round) {
       ? fillTemplate(loadTemplate("convergence"), { round: String(round) })
       : "";
 
+  // Discussion turns don't use lens — agents argue from genuine assessment
   return fillTemplate(loadTemplate("turn"), {
     agent,
-    lensDesc: LENS_DESC[agent].turn,
+    lensDesc: "",
     fileContent,
     round: String(round),
     otherAgent,
@@ -380,11 +400,13 @@ async function main() {
   if (!filePath) {
     console.error("Usage: node scripts/headless-council.js <discussion-file.md>");
     console.error("");
-    console.error("Configure agent CLIs via frontmatter:");
+    console.error("Configure via frontmatter:");
     console.error('  agent_a_cli: "claude"   (default)');
     console.error('  agent_b_cli: "codex"');
+    console.error(`  lens_id: "${LENSES.default}"   (default)`);
     console.error("");
     console.error(`Supported CLIs: ${Object.keys(CLI_PROFILES).join(", ")}`);
+    console.error(`Available lenses: ${LENSES.pairs.map((p) => p.id).join(", ")}`);
     process.exit(1);
   }
 
@@ -434,15 +456,19 @@ async function main() {
     const maxRounds = parseInt(fm.max_rounds || "7", 10);
     const gitMode = fm.git_commit || "final_only";
 
+    // Resolve lens pair
+    const lensId = fm.lens_id || LENSES.default;
+    const lensDesc = getLensDesc(lensId);
     log(`Topic: ${topic}`);
+    log(`Lens: ${lensId}`);
     log(`Max rounds: ${maxRounds}, Git: ${gitMode}`);
 
     // Phase 1: Blind Research
     if (fm.status === STATUS.RESEARCHING) {
       log("Phase 1: Blind research (parallel)...");
 
-      const promptA = buildResearchPrompt(topic, "A");
-      const promptB = buildResearchPrompt(topic, "B");
+      const promptA = buildResearchPrompt(topic, "A", lensDesc);
+      const promptB = buildResearchPrompt(topic, "B", lensDesc);
 
       const [resultA, resultB] = await runAgentsParallel(
         [
