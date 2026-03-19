@@ -66,6 +66,14 @@ By default, both debaters use the same AI you're running the command in — two 
 /discuss "Should we use a monorepo?" monorepo.md --agents claude,codex
 ```
 
+### Discuss a PR
+
+```
+/discuss --pr 123
+```
+
+Two agents debate the design decisions in a pull request — not code style, but architectural tradeoffs, approach, and alternatives. Posts the consensus as a PR comment when done.
+
 ### From Codex CLI
 
 Point Codex to the adapter file in this repo:

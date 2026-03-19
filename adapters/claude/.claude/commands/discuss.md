@@ -8,6 +8,7 @@ A single command for structured, turn-based AI discussions. Supports three modes
 /discuss "topic" file.md                              → council mode (default): orchestrates two Claude instances debating to completion
 /discuss "topic" file.md --agents claude,codex        → council with cross-model debate (Claude vs Codex)
 /discuss "topic" file.md --mode external              → external mode: creates discussion file, waits for another AI to join manually
+/discuss --pr 123                                     → PR discussion: debate the design decisions in a pull request
 /discuss file.md                                      → join mode: joins an existing discussion as a participant
 ```
 
@@ -46,13 +47,14 @@ When invoked, print this to the user so they know what's happening:
 
 Parse the user's input to determine the mode:
 
-1. If a **topic string in quotes** AND a **file path** are provided:
+1. If `--pr NUMBER` is provided → PR discussion mode (see below)
+2. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode external` flag → external mode
    - Check for `--agents X,Y` flag (council mode only) → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
    - Check for `--lens LENS_ID` flag (council mode only) → set `lens_id` directly, skip picker. Validate against the IDs in `~/.claude/scripts/prompts/lenses.json`. If the ID is not found, error with the list of valid IDs from the registry.
    - Otherwise → council mode (default)
-2. If **only a file path** is provided and the file exists → join mode
-3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
+3. If **only a file path** is provided and the file exists → join mode
+4. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
 
 ---
 
@@ -126,6 +128,105 @@ Poll the file for changes (every ~10 seconds):
 7. If `round > max_rounds` → write a consensus entry instead of a response
 
 For each response turn, follow the **Turn Structure** below.
+
+---
+
+## PR Discussion Mode (`--pr`)
+
+Debates the design decisions in a pull request. This is not a code review — it's a structured discussion about the architectural tradeoffs, design choices, and approach taken in the PR.
+
+### How it works
+
+1. **Gather PR context** using `gh` CLI:
+   ```bash
+   gh pr view NUMBER --json title,body,baseRefName,headRefName
+   gh pr diff NUMBER
+   ```
+
+2. **Generate the topic** from the PR title and body. The topic should frame the discussion around the design decisions, not the code style.
+
+3. **Create the discussion file** as `pr-NUMBER-discussion.md` in the current directory. Include the PR context as a preamble section before the Key Questions:
+
+   ```markdown
+   ---
+   topic: "<generated from PR title>"
+   mode: council
+   pr_number: NUMBER
+   lens_id: "simplicity-vs-correctness"
+   selection_mode: "default"
+   max_rounds: 5
+   git_commit: none
+   agent_a: "Claude Agent A"
+   agent_b: "Claude Agent B"
+   agent_a_cli: "claude"
+   agent_b_cli: "claude"
+   agent_a_lens: "simplicity/pragmatism"
+   agent_b_lens: "correctness/rigor"
+   status: researching
+   turn: A
+   round: 0
+   created: <ISO 8601 timestamp>
+   last_updated: <ISO 8601 timestamp>
+   ---
+
+   # Discussion: <PR title — design tradeoffs>
+
+   ## PR Context
+
+   **PR #NUMBER:** <title>
+   **Branch:** <head> → <base>
+
+   ### Description
+   <PR body>
+
+   ### Diff Summary
+   <summary of changed files and key changes — not the full diff>
+
+   ## Key Questions
+   1. [Generated from the PR — focus on design/architecture decisions]
+   2. ...
+   3. ...
+   ```
+
+4. **Default lens is `simplicity-vs-correctness`** — most PR discussions are about design tradeoffs. The picker is still shown so the user can override.
+
+5. **Run the orchestrator** as normal: `node ~/.claude/scripts/headless-council.js pr-NUMBER-discussion.md`
+
+6. **Post the consensus as a PR comment** when done:
+   ```bash
+   gh pr comment NUMBER --body "$(cat <<'EOF'
+   ## AI Council Discussion
+
+   <formatted consensus summary from the discussion>
+
+   <link to full discussion file>
+   EOF
+   )"
+   ```
+
+Print to the user:
+> Starting PR discussion for #NUMBER: "<PR title>"
+> Lens: simplicity-vs-correctness (enter to accept, or pick 1-3)
+> Output: pr-NUMBER-discussion.md
+> Running...
+
+When complete:
+> Discussion complete. Consensus posted as PR comment.
+> Full discussion: pr-NUMBER-discussion.md
+
+### What it focuses on
+
+The PR discussion should focus on:
+- Is this the right approach / abstraction?
+- What are the tradeoffs being made?
+- What alternatives were considered (or should have been)?
+- Does this scale to the known future requirements?
+- Are there hidden assumptions or coupling?
+
+It should NOT focus on:
+- Code style, naming, formatting
+- Individual line-level bugs (that's code review)
+- Test coverage specifics
 
 ---
 
