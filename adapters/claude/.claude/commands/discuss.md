@@ -49,7 +49,7 @@ Parse the user's input to determine the mode:
 1. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode external` flag → external mode
    - Check for `--agents X,Y` flag (council mode only) → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
-   - Check for `--lens LENS_ID` flag (council mode only) → set `lens_id` directly, skip picker. Valid IDs: `risk-vs-opportunity`, `simplicity-vs-correctness`, `speed-vs-maintainability`. If the ID is invalid, error: "Unknown lens '[value]'. Available: risk-vs-opportunity, simplicity-vs-correctness, speed-vs-maintainability"
+   - Check for `--lens LENS_ID` flag (council mode only) → set `lens_id` directly, skip picker. Validate against the IDs in `~/.claude/scripts/prompts/lenses.json`. If the ID is not found, error with the list of valid IDs from the registry.
    - Otherwise → council mode (default)
 2. If **only a file path** is provided and the file exists → join mode
 3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
@@ -131,7 +131,7 @@ For each response turn, follow the **Turn Structure** below.
 
 ## Council Mode (`--mode council`)
 
-Orchestrates two independent top-level Claude instances that debate the topic with full reasoning capabilities. Each instance runs as a separate `claude -p` process with `--effort high`, ensuring extended thinking is available for every turn. The orchestrator (you) manages the discussion file, frontmatter, and turn sequencing.
+Orchestrates two independent top-level Claude instances that debate the topic with full reasoning capabilities. Each instance runs as a separate `claude -p` process with `--effort max`, ensuring extended thinking is available for every turn. The orchestrator (you) manages the discussion file, frontmatter, and turn sequencing.
 
 **Why not subagents:** Claude Code subagents do not receive extended thinking blocks. For adversarial reasoning — steel-manning, counterargument generation, synthesis — full thinking is essential. Council mode uses orchestrated instances to guarantee the best available reasoning on every turn.
 
@@ -139,21 +139,21 @@ Orchestrates two independent top-level Claude instances that debate the topic wi
 
 Before creating the discussion file, select the debate lens. If `--lens LENS_ID` was provided, use it directly. Otherwise, present the picker:
 
-Read the topic and show the user available lens pairs. Analyze the topic to determine which lens is the best fit, then present options with your recommendation highlighted:
+1. Read the lens registry from `~/.claude/scripts/prompts/lenses.json` to get available pairs, their IDs, names, and descriptions.
+2. Analyze the topic to determine which lens is the best fit.
+3. Present options with your recommendation highlighted:
 
 ```
 Debate lens for: "<topic>"
 
-  1. Risk vs Opportunity — general-purpose, one agent stress-tests, the other advocates
-  2. Simplicity vs Correctness — architecture/design, simple path vs thorough approach
-  3. Speed vs Maintainability — roadmap/refactoring, ship now vs build to last
+  1. [name] — [description]
+  2. [name] — [description]
+  3. [name] — [description]
 
-  Recommended: [your pick based on the topic] (enter to accept, or pick 1-3)
+  Recommended: [your pick based on the topic] (enter to accept, or pick 1-N)
 ```
 
-Valid lens IDs: `risk-vs-opportunity`, `simplicity-vs-correctness`, `speed-vs-maintainability`
-
-The recommendation is your judgment based on the topic — not a heuristic or keyword match. If the topic is ambiguous, recommend `risk-vs-opportunity` (the general-purpose default).
+The recommendation is your judgment based on the topic — not a heuristic or keyword match. If the topic is ambiguous, recommend the default lens from the registry.
 
 Record the selection in frontmatter as `lens_id` and `selection_mode` (`default` if user hit enter on recommendation, `manual` if they picked a different one, `flag` if `--lens` was used).
 

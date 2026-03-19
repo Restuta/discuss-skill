@@ -43,9 +43,15 @@ const STATUS = {
 // --- Lens Registry ---
 // Loaded from lenses.json. Each pair defines research and turn prompts for both agents.
 
-const LENSES = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "prompts", "lenses.json"), "utf-8")
-);
+const LENSES_PATH = path.join(__dirname, "prompts", "lenses.json");
+let LENSES;
+try {
+  LENSES = JSON.parse(fs.readFileSync(LENSES_PATH, "utf-8"));
+} catch (err) {
+  console.error(`Failed to load lens registry: ${LENSES_PATH}`);
+  console.error(err.code === "ENOENT" ? "File not found. Re-run install.sh." : err.message);
+  process.exit(1);
+}
 
 function getLensPair(lensId) {
   const pair = LENSES.pairs.find((p) => p.id === lensId);
