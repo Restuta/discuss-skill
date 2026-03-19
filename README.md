@@ -84,7 +84,7 @@ Any AI that can read markdown and append to a file can participate. Read the pro
 ## Command reference
 
 ```
-/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B]
+/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B] [--lens LENS_ID]
 /discuss file.md
 ```
 
@@ -107,6 +107,18 @@ Optional. Controls which AI CLI runs each side of the debate in council mode.
 | `claude,codex` | Agent A = Claude, Agent B = Codex |
 | `codex,claude` | Agent A = Codex, Agent B = Claude |
 | `codex,codex` | Both agents use Codex |
+
+### Lens (`--lens`)
+
+Optional. Controls the analytical lens pair — what each agent focuses on during research. If omitted, the tool shows a picker with a recommendation based on your topic.
+
+| Lens ID | Agent A focuses on | Agent B focuses on | Best for |
+|---|---|---|---|
+| `risk-vs-opportunity` | Risks, costs, failure modes | Benefits, opportunities, success cases | General decisions (default) |
+| `simplicity-vs-correctness` | Simplicity, pragmatism | Correctness, rigor, edge cases | Architecture and design |
+| `speed-vs-maintainability` | Speed to ship, time-to-value | Maintainability, long-term cost | Roadmap, refactoring |
+
+Lenses apply to the research phase only. During the debate, agents argue from their genuine assessment — the lens ensures diverse starting positions, not permanent bias.
 
 ### Design philosophy
 

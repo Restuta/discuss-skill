@@ -49,6 +49,7 @@ Parse the user's input to determine the mode:
 1. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode external` flag → external mode
    - Check for `--agents X,Y` flag → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
+   - Check for `--lens LENS_ID` flag → set `lens_id` directly, skip picker
    - Otherwise → council mode (default)
 2. If **only a file path** is provided and the file exists → join mode
 3. If **only a file path** is provided and the file does NOT exist → error: "File not found. To start a new discussion, provide a topic: `/discuss \"your topic\" file.md`"
@@ -134,6 +135,28 @@ Orchestrates two independent top-level Claude instances that debate the topic wi
 
 **Why not subagents:** Claude Code subagents do not receive extended thinking blocks. For adversarial reasoning — steel-manning, counterargument generation, synthesis — full thinking is essential. Council mode uses orchestrated instances to guarantee the best available reasoning on every turn.
 
+### Lens selection
+
+Before creating the discussion file, select the debate lens. If `--lens LENS_ID` was provided, use it directly. Otherwise, present the picker:
+
+Read the topic and show the user available lens pairs. Analyze the topic to determine which lens is the best fit, then present options with your recommendation highlighted:
+
+```
+Debate lens for: "<topic>"
+
+  1. Risk vs Opportunity — general-purpose, one agent stress-tests, the other advocates
+  2. Simplicity vs Correctness — architecture/design, simple path vs thorough approach
+  3. Speed vs Maintainability — roadmap/refactoring, ship now vs build to last
+
+  Recommended: [your pick based on the topic] (enter to accept, or pick 1-3)
+```
+
+Valid lens IDs: `risk-vs-opportunity`, `simplicity-vs-correctness`, `speed-vs-maintainability`
+
+The recommendation is your judgment based on the topic — not a heuristic or keyword match. If the topic is ambiguous, recommend `risk-vs-opportunity` (the general-purpose default).
+
+Record the selection in frontmatter as `lens_id` and `selection_mode` (`default` if user hit enter on recommendation, `manual` if they picked a different one, `flag` if `--lens` was used).
+
 ### Setup
 
 Create the discussion file with `mode: council`:
@@ -142,14 +165,16 @@ Create the discussion file with `mode: council`:
 ---
 topic: "<the topic>"
 mode: council
+lens_id: "<selected lens id>"
+selection_mode: "<default|manual|flag>"
 max_rounds: 7
 git_commit: final_only
 agent_a: "Claude Agent A"
 agent_b: "Claude Agent B"
 agent_a_cli: "claude"
 agent_b_cli: "claude"
-agent_a_lens: "risk/cost/failure"
-agent_b_lens: "value/opportunity/success"
+agent_a_lens: "<from selected lens pair>"
+agent_b_lens: "<from selected lens pair>"
 status: researching
 turn: A
 round: 0

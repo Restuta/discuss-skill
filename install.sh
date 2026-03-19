@@ -39,6 +39,7 @@ echo "Installing council orchestrator..."
 cp "$SCRIPT_DIR/scripts/headless-council.js" "$CLAUDE_SCRIPTS_DIR/headless-council.js"
 mkdir -p "$CLAUDE_SCRIPTS_DIR/prompts"
 cp "$SCRIPT_DIR/scripts/prompts/"*.template "$CLAUDE_SCRIPTS_DIR/prompts/"
+cp "$SCRIPT_DIR/scripts/prompts/lenses.json" "$CLAUDE_SCRIPTS_DIR/prompts/"
 
 echo ""
 echo "Installed:"
