@@ -315,11 +315,7 @@ function buildTurnPrompt(agent, fileContent, round) {
 }
 
 function buildConsensusPrompt(fileContent) {
-  // Use synthesizer template — neutral arbiter framing produces better consensus
-  // than having a debate participant summarize their own discussion.
-  // Evidence: n-agent eval showed 3-codex (with synthesizer) matched cross-model
-  // quality (97% checklist coverage) vs 2-codex without synthesizer (95%).
-  return fillTemplate(loadTemplate("synthesizer-consensus"), { fileContent });
+  return fillTemplate(loadTemplate("consensus"), { fileContent });
 }
 
 // --- Git ---
