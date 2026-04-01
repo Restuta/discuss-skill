@@ -140,7 +140,7 @@ Output: a single append-only markdown file with blind research, structured debat
 - [ ] More adapters (Cursor, Windsurf, Aider)
 
 ### Future
-- [ ] 3+ participant panels with role assignment
+- [x] ~~3+ participant panels with role assignment~~ — Eval showed 5-agent is counterproductive (92% coverage vs 97% for 2-agent, 2x cost). Cross-model diversity > agent count.
 - [ ] Async mode (participants contribute hours/days apart)
 - [ ] Web viewer for discussion logs
 - [ ] Cost tracking (tokens per discussion)

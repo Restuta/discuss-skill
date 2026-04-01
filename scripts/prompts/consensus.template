@@ -15,8 +15,8 @@ Write the consensus using this EXACT format:
 
 ### Key Contention Points
 
-| # | What We Disagreed On | How It Was Resolved | Who Shifted & Why |
-|---|---------------------|--------------------|--------------------|
+| # | What Was Debated | Resolution | Who Had the Strongest Case & Why |
+|---|-----------------|------------|----------------------------------|
 | 1 | ... | ... | ... |
 
 ### Unresolved Items & Risks

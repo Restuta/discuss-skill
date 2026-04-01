@@ -1,0 +1,124 @@
+{
+  "name": "healthcare-ai-deploy",
+  "topic": "A healthcare AI startup (Series B, 18 months runway) has a diagnostic model for detecting diabetic retinopathy from retinal images. The model achieves 87% accuracy, matching average radiologist performance. Should they pursue FDA clearance and deploy now with human-in-the-loop, or invest 12-18 months to reach 95% accuracy before seeking clearance?",
+  "key_questions": [
+    "Is 87% accuracy sufficient given that it matches current standard of care (average radiologist)?",
+    "What does the FDA clearance pathway look like at 87% vs 95%, and does higher accuracy meaningfully change the regulatory burden?",
+    "What are the data and compute requirements to go from 87% to 95%, and is 12-18 months realistic?",
+    "Can the company survive 12-18 months of continued burn without revenue from deployment?"
+  ],
+  "max_rounds": 5,
+  "expert_checklist": [
+    {
+      "id": "standard-of-care",
+      "item": "Comparison to standard of care, not to 100% — 87% matching average radiologist IS clinically meaningful",
+      "keywords": ["standard of care", "average radiologist", "current practice", "baseline", "clinical meaning"],
+      "weight": 2,
+      "category": "clinical"
+    },
+    {
+      "id": "sensitivity-specificity",
+      "item": "Sensitivity vs specificity trade-off — false negatives (missed disease) vs false positives (unnecessary referrals)",
+      "keywords": ["sensitivity", "specificity", "false negative", "false positive", "PPV", "NPV"],
+      "weight": 2,
+      "category": "clinical"
+    },
+    {
+      "id": "fda-pathway",
+      "item": "FDA regulatory pathway — 510(k) vs De Novo classification, predicate device comparison",
+      "keywords": ["510(k)", "De Novo", "FDA", "predicate", "clearance", "approval", "regulatory pathway"],
+      "weight": 2,
+      "category": "regulatory"
+    },
+    {
+      "id": "clinical-validation",
+      "item": "Clinical validation study design — prospective vs retrospective, sample size, multi-site",
+      "keywords": ["clinical validation", "prospective", "retrospective", "sample size", "multi-site", "trial"],
+      "weight": 1,
+      "category": "regulatory"
+    },
+    {
+      "id": "post-market-surveillance",
+      "item": "Post-market surveillance requirements and continuous monitoring obligations",
+      "keywords": ["post-market", "surveillance", "monitoring", "adverse event", "reporting"],
+      "weight": 1,
+      "category": "regulatory"
+    },
+    {
+      "id": "real-world-gap",
+      "item": "Real-world vs lab performance gap — model accuracy degrades on different cameras, lighting, populations",
+      "keywords": ["real-world", "lab", "performance gap", "generalization", "different population", "camera", "domain shift"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "data-bias",
+      "item": "Training data bias — demographic, geographic, device diversity in training set",
+      "keywords": ["bias", "demographic", "geographic", "diversity", "underrepresented", "fairness"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "diminishing-returns",
+      "item": "Data requirements for 87% to 95% — diminishing returns curve, likely needs 5-10x more data",
+      "keywords": ["diminishing returns", "more data", "5x", "10x", "logarithmic", "data requirement", "plateau"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "competitor-timeline",
+      "item": "Competitor timeline and first-mover advantage in AI diagnostics",
+      "keywords": ["competitor", "first mover", "market window", "race", "others", "ahead"],
+      "weight": 1,
+      "category": "business"
+    },
+    {
+      "id": "reimbursement",
+      "item": "Reimbursement pathway — CPT codes, payer acceptance, willingness to pay for AI-assisted reads",
+      "keywords": ["reimbursement", "CPT", "payer", "insurance", "billing", "willingness to pay"],
+      "weight": 1,
+      "category": "business"
+    },
+    {
+      "id": "liability",
+      "item": "Liability and malpractice implications — who is responsible when AI-assisted diagnosis is wrong?",
+      "keywords": ["liability", "malpractice", "responsible", "lawsuit", "legal", "who is liable"],
+      "weight": 1,
+      "category": "legal"
+    },
+    {
+      "id": "hitl-design",
+      "item": "Human-in-the-loop workflow design — alert fatigue, override rates, radiologist acceptance",
+      "keywords": ["human in the loop", "HITL", "alert fatigue", "override", "workflow", "radiologist acceptance"],
+      "weight": 2,
+      "category": "clinical"
+    },
+    {
+      "id": "runway-survival",
+      "item": "Runway and business survival — 18 months runway vs 12-18 months delay means near-zero margin for error",
+      "keywords": ["runway", "burn", "survival", "cash", "funding", "18 months", "run out"],
+      "weight": 2,
+      "category": "business"
+    }
+  ],
+  "traps": [
+    {
+      "id": "not-good-enough",
+      "description": "Claiming 87% is insufficient without comparing to standard of care — the benchmark is average radiologist, not perfection",
+      "detection_keywords": ["not good enough", "too low", "need higher", "87% is bad", "patients deserve better"],
+      "caught_keywords": ["standard of care", "matches radiologist", "current baseline", "already comparable"]
+    },
+    {
+      "id": "ship-and-iterate",
+      "description": "Advocating 'ship now, improve later' without acknowledging that medical device modifications require new regulatory submissions (not a software update)",
+      "detection_keywords": ["iterate", "update later", "improve post-launch", "ship and fix"],
+      "caught_keywords": ["regulatory submission", "new clearance", "modification", "not like software", "PMA supplement"]
+    },
+    {
+      "id": "data-naive",
+      "description": "Assuming 87% to 95% is a simple training improvement without addressing the exponential data requirements and diminishing returns",
+      "detection_keywords": ["just train more", "more epochs", "fine-tune", "easy to improve"],
+      "caught_keywords": ["diminishing returns", "exponential", "10x data", "not linear", "fundamental limit"]
+    }
+  ]
+}

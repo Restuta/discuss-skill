@@ -44,6 +44,21 @@
         "research": "Focus on MAINTAINABILITY, long-term cost, and sustainable architecture. Argue for investments that pay off over time. Challenge shortcuts that create tech debt.",
         "turn": "MAINTAINABILITY, LONG-TERM. Build to last."
       }
+    },
+    {
+      "id": "brand-strategy-vs-creative-direction",
+      "name": "Brand Strategy vs Creative Direction",
+      "description": "Branding and identity. One agent evaluates positioning and market fit, the other pushes for emotional resonance and boldness.",
+      "agent_a": {
+        "label": "brand-strategist",
+        "research": "Focus on POSITIONING, DIFFERENTIATION, MARKET CLARITY, audience perception, and whether the brand works in context. Evaluate against competitors. Be the strategist.",
+        "turn": "POSITIONING, DIFFERENTIATION, MARKET FIT. Does it work in context?"
+      },
+      "agent_b": {
+        "label": "creative-director",
+        "research": "Focus on EMOTIONAL RESONANCE, VISUAL IMAGINATION, STORYTELLING POWER, boldness, and what makes the brand memorable and felt. Be the creative director.",
+        "turn": "EMOTIONAL RESONANCE, MEMORABILITY, BOLDNESS. Does it move people?"
+      }
     }
   ],
   "default": "risk-vs-opportunity"
