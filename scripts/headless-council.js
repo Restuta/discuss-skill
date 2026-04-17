@@ -79,7 +79,7 @@ const CLI_PROFILES = {
     name: "Claude",
     binary: "claude",
     buildCmd: (promptFile, cwd) =>
-      `cd "${cwd}" && cat "${promptFile}" | claude -p --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
+      `cd "${cwd}" && cat "${promptFile}" | claude -p --model claude-opus-4-7 --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });

@@ -197,7 +197,7 @@ The orchestrator MUST generate the Key Questions from the topic when creating th
 Council mode supports running different AI CLIs for each agent. Set `agent_a_cli` and `agent_b_cli` in the frontmatter to control which CLI runs each side of the debate. Both default to `"claude"`.
 
 Supported CLIs:
-- `claude` — Claude Code CLI (`claude -p --effort high`)
+- `claude` — Claude Code CLI (`claude -p --model claude-opus-4-7 --effort max`)
 - `codex` — OpenAI Codex CLI (`codex exec --full-auto`)
 
 When the user specifies `--agents claude,codex` (or similar), parse the comma-separated values and set `agent_a_cli` and `agent_b_cli` accordingly in the frontmatter. Agent names in the frontmatter should reflect the CLI: e.g. `agent_a: "Claude"`, `agent_b: "Codex"`.
