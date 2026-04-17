@@ -89,7 +89,7 @@ const CLI_PROFILES = {
     name: "Codex",
     binary: "codex",
     buildCmd: (promptFile, cwd) =>
-      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -C "${cwd}" -`,
+      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m gpt-5.4 -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`,
     check: () => {
       execSync("which codex", { stdio: "pipe" });
     },
