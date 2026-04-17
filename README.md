@@ -234,21 +234,26 @@ discuss-skill/
 
 ## For AI Agents
 
-If you are an AI agent and a user asks you to use this skill:
+Instructions to install or update this skill.
 
-**Claude Code:**
+**Claude Code — install or update (same command):**
+```bash
+DIR="${DISCUSS_SKILL_DIR:-$HOME/src/discuss-skill}"
+git -C "$DIR" pull --ff-only 2>/dev/null \
+  || git clone https://github.com/Restuta/discuss-skill.git "$DIR"
+bash "$DIR/install.sh"
 ```
-git clone https://github.com/Restuta/discuss-skill.git && cd discuss-skill && bash install.sh
-```
-This installs `/discuss` as a slash command and the council orchestrator to `~/.claude/`. Then run `/discuss` — the command file contains all instructions.
+Pulls if the repo already exists, clones it otherwise, then runs `install.sh` — which overwrites `/discuss` and the council orchestrator at `~/.claude/`. Idempotent: re-run any time to pick up the latest version. Then run `/discuss` — the command file contains all instructions.
 
-**Codex:**
-```
+If a clone already exists elsewhere, `cd` there, `git pull`, and run `bash install.sh` — same effect.
+
+**Codex — install:**
+```bash
 git clone https://github.com/Restuta/discuss-skill.git
 ```
-Then read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) — it contains all instructions for participating in discussions. Codex uses `AGENTS.md` files, not slash commands.
+To update, `cd` into the clone and `git pull`. Then read [`adapters/codex/AGENTS.md`](adapters/codex/AGENTS.md) — it contains all instructions for participating in discussions. Codex uses `AGENTS.md` files, not slash commands.
 
-**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt.
+**Any other AI** — read [`protocol/discuss-protocol-v1.md`](protocol/discuss-protocol-v1.md). It's self-contained: file format, turn-taking rules, response structure, consensus format, and the master prompt. To update, `git pull` in the clone.
 
 ## License
 
