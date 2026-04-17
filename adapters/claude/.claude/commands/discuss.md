@@ -198,7 +198,7 @@ Council mode supports running different AI CLIs for each agent. Set `agent_a_cli
 
 Supported CLIs:
 - `claude` — Claude Code CLI (`claude -p --model claude-opus-4-7 --effort max`)
-- `codex` — OpenAI Codex CLI (`codex exec --full-auto`)
+- `codex` — OpenAI Codex CLI (`codex exec --full-auto -m gpt-5.4 -c model_reasoning_effort="xhigh"`)
 
 When the user specifies `--agents claude,codex` (or similar), parse the comma-separated values and set `agent_a_cli` and `agent_b_cli` accordingly in the frontmatter. Agent names in the frontmatter should reflect the CLI: e.g. `agent_a: "Claude"`, `agent_b: "Codex"`.
 
