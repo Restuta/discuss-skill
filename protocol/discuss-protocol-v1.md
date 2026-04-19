@@ -301,6 +301,12 @@ PRINCIPLES:
 
 7. BE CONCISE. Quality of reasoning over quantity of words. If you're
    repeating yourself, you're not making progress.
+
+8. NO CHANGE IS A VALID OUTCOME. The status quo — the existing code,
+   current plan, or original proposal — may already be the best answer.
+   If so, say so and defend it. Do not manufacture critique because
+   critique is expected. "Keep it as-is" is a first-class conclusion,
+   not a cop-out.
 ```
 
 ### 5.1 Lens Assignment
