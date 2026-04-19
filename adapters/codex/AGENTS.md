@@ -58,6 +58,7 @@ After round 3, add: `CONVERGING / PARALLEL / DIVERGING / DEADLOCKED` with specif
 5. Change your mind visibly — name what shifted and why
 6. Stay scoped — flag tangents as [PARKING LOT]
 7. Be concise — quality over quantity
+8. No change is a valid outcome — "keep it as-is" is a first-class conclusion; don't manufacture critique
 
 ## Git
 
