@@ -327,6 +327,7 @@ These principles govern every turn:
 5. **Change your mind visibly.** Say so explicitly and explain what shifted.
 6. **Stay scoped.** Flag tangents as [PARKING LOT], don't chase them.
 7. **Be concise.** Quality over quantity. Repetition = no progress.
+8. **No change is a valid outcome.** The status quo may already be the best answer. "Keep it as-is" is a first-class conclusion, not a cop-out — don't manufacture critique because critique is expected.
 
 ---
 
