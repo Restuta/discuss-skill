@@ -83,7 +83,7 @@ const CLI_PROFILES = {
     binary: "claude",
     defaultModel: "claude-opus-4-7",
     buildCmd: (promptFile, cwd, model) =>
-      `cd "${cwd}" && cat "${promptFile}" | claude -p --model ${model} --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
+      `cd "${cwd}" && cat "${promptFile}" | claude -p --model "${model}" --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });
@@ -94,7 +94,7 @@ const CLI_PROFILES = {
     binary: "codex",
     defaultModel: "gpt-5.5",
     buildCmd: (promptFile, cwd, model) =>
-      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m ${model} -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`,
+      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m "${model}" -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`,
     check: () => {
       execSync("which codex", { stdio: "pipe" });
     },
@@ -152,7 +152,12 @@ function updateFrontmatter(content, updates) {
   return content.replace(/^---\n([\s\S]*?)\n---/, (_, fm) => {
     let updated = fm;
     for (const [key, val] of Object.entries(updates)) {
-      updated = updated.replace(new RegExp(`^${key}:.*$`, "m"), `${key}: ${val}`);
+      const keyRegex = new RegExp(`^${key}:.*$`, "m");
+      if (keyRegex.test(updated)) {
+        updated = updated.replace(keyRegex, `${key}: ${val}`);
+      } else {
+        updated = `${updated}\n${key}: ${val}`;
+      }
     }
     return `---\n${updated}\n---`;
   });
