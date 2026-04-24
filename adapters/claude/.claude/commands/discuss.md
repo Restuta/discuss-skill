@@ -7,6 +7,7 @@ A single command for structured, turn-based AI discussions. Supports three modes
 ```
 /discuss "topic" file.md                              → council mode (default): orchestrates two Claude instances debating to completion
 /discuss "topic" file.md --agents claude,codex        → council with cross-model debate (Claude vs Codex)
+/discuss "topic" file.md --models MODEL_A,MODEL_B     → pin specific model versions (e.g. claude-opus-4-7,gpt-5.4); for eval reproducibility
 /discuss "topic" file.md --mode external              → external mode: creates discussion file, waits for another AI to join manually
 /discuss file.md                                      → join mode: joins an existing discussion as a participant
 ```
@@ -49,6 +50,7 @@ Parse the user's input to determine the mode:
 1. If a **topic string in quotes** AND a **file path** are provided:
    - Check for `--mode external` flag → external mode
    - Check for `--agents X,Y` flag (council mode only) → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
+   - Check for `--models A_MODEL,B_MODEL` flag (council mode only) → set `agent_a_model` and `agent_b_model` directly in frontmatter (e.g. `--models claude-opus-4-7,gpt-5.5`). Use this when you need a specific model version for reproducibility (eval benchmarks, calibrations). Without this flag the orchestrator uses each CLI's default model and writes the resolved name back into frontmatter after first run.
    - Check for `--lens LENS_ID` flag (council mode only) → set `lens_id` directly, skip picker. Validate against the IDs in `~/.claude/scripts/prompts/lenses.json`. If the ID is not found, error with the list of valid IDs from the registry.
    - Otherwise → council mode (default)
 2. If **only a file path** is provided and the file exists → join mode
@@ -206,6 +208,18 @@ Example:
 ```
 /discuss "Should we use a monorepo?" monorepo.md --mode council --agents claude,codex
 ```
+
+### Pinning specific models
+
+Defaults: each CLI uses its built-in default (`claude-opus-4-7` for claude, `gpt-5.5` for codex). The orchestrator records the resolved model into `agent_a_model` / `agent_b_model` in the discussion file's frontmatter after first run, so every discussion is self-documenting.
+
+When you need a specific version (eval reproducibility, calibration, comparing model generations), pin via `--models`:
+
+```
+/discuss "Best 12-week training program for this client" discussion.md --agents claude,codex --models claude-opus-4-7,gpt-5.4
+```
+
+Or write `agent_a_model` / `agent_b_model` directly into existing frontmatter — the orchestrator will pin to those values on the next run.
 
 ### Orchestration
 

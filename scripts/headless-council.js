@@ -74,12 +74,16 @@ function getLensDesc(lensId) {
 // Each profile defines how to invoke a specific AI CLI in headless mode.
 // To add a new CLI, add an entry here.
 
+// Each profile has a `defaultModel` (used when no override is set) and a
+// `buildCmd(promptFile, cwd, model)` that takes a resolved model. Override
+// via `agent_a_model` / `agent_b_model` in discussion frontmatter.
 const CLI_PROFILES = {
   claude: {
     name: "Claude",
     binary: "claude",
-    buildCmd: (promptFile, cwd) =>
-      `cd "${cwd}" && cat "${promptFile}" | claude -p --model claude-opus-4-7 --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
+    defaultModel: "claude-opus-4-7",
+    buildCmd: (promptFile, cwd, model) =>
+      `cd "${cwd}" && cat "${promptFile}" | claude -p --model ${model} --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });
@@ -88,8 +92,9 @@ const CLI_PROFILES = {
   codex: {
     name: "Codex",
     binary: "codex",
-    buildCmd: (promptFile, cwd) =>
-      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m gpt-5.5 -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`,
+    defaultModel: "gpt-5.5",
+    buildCmd: (promptFile, cwd, model) =>
+      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m ${model} -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`,
     check: () => {
       execSync("which codex", { stdio: "pipe" });
     },
@@ -162,10 +167,11 @@ function preparePromptFile(promptText, tmpDir) {
   return promptFile;
 }
 
-function runAgent(promptText, cliName, tmpDir, cwd) {
+function runAgent(promptText, cliName, tmpDir, cwd, model) {
   const profile = getProfile(cliName);
+  const resolvedModel = model || profile.defaultModel;
   const promptFile = preparePromptFile(promptText, tmpDir);
-  const cmd = profile.buildCmd(promptFile, cwd);
+  const cmd = profile.buildCmd(promptFile, cwd, resolvedModel);
 
   try {
     const result = execSync(cmd, {
@@ -184,11 +190,12 @@ function runAgent(promptText, cliName, tmpDir, cwd) {
 function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   return Promise.all(
     agentConfigs.map(
-      ({ promptText, cliName }) =>
+      ({ promptText, cliName, model }) =>
         new Promise((resolve) => {
           const profile = getProfile(cliName);
+          const resolvedModel = model || profile.defaultModel;
           const promptFile = preparePromptFile(promptText, tmpDir);
-          const cmd = profile.buildCmd(promptFile, cwd);
+          const cmd = profile.buildCmd(promptFile, cwd, resolvedModel);
 
           const child = spawn("sh", ["-c", cmd], {
             stdio: ["pipe", "pipe", "pipe"],
@@ -216,11 +223,11 @@ function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   );
 }
 
-function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd) {
-  let result = runAgent(promptText, cliName, tmpDir, cwd);
+function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd, model) {
+  let result = runAgent(promptText, cliName, tmpDir, cwd, model);
   if (!validator(result)) {
     log("Output failed validation, retrying...");
-    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd);
+    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd, model);
     if (!validator(result)) {
       log("Retry also failed. Using raw output.");
     }
@@ -429,8 +436,24 @@ async function main() {
   const cliA = fm.agent_a_cli || "claude";
   const cliB = fm.agent_b_cli || "claude";
 
-  log(`Agent A: ${getProfile(cliA).name} (${cliA})`);
-  log(`Agent B: ${getProfile(cliB).name} (${cliB})`);
+  // Resolve model for each agent (default: profile.defaultModel).
+  // Override by setting agent_a_model / agent_b_model in frontmatter.
+  const modelA = fm.agent_a_model || getProfile(cliA).defaultModel;
+  const modelB = fm.agent_b_model || getProfile(cliB).defaultModel;
+
+  log(`Agent A: ${getProfile(cliA).name} (${cliA}) — model: ${modelA}${fm.agent_a_model ? " (pinned)" : " (default)"}`);
+  log(`Agent B: ${getProfile(cliB).name} (${cliB}) — model: ${modelB}${fm.agent_b_model ? " (pinned)" : " (default)"}`);
+
+  // Persist resolved models into frontmatter so the discussion file is
+  // self-documenting about which models actually ran (matters for evals).
+  if (!fm.agent_a_model || !fm.agent_b_model) {
+    content = updateFrontmatter(content, {
+      agent_a_model: modelA,
+      agent_b_model: modelB,
+    });
+    fs.writeFileSync(absPath, content);
+    fm = parseFrontmatter(content);
+  }
 
   // Preflight — check all required CLIs
   const uniqueClis = [...new Set([cliA, cliB])];
@@ -449,6 +472,7 @@ async function main() {
   log(`Temp directory: ${tmpDir}`);
 
   const agentCli = { A: cliA, B: cliB };
+  const agentModel = { A: modelA, B: modelB };
   const cwd = path.dirname(absPath);
 
   try {
@@ -472,8 +496,8 @@ async function main() {
 
       const [resultA, resultB] = await runAgentsParallel(
         [
-          { promptText: promptA, cliName: cliA },
-          { promptText: promptB, cliName: cliB },
+          { promptText: promptA, cliName: cliA, model: modelA },
+          { promptText: promptB, cliName: cliB, model: modelB },
         ],
         tmpDir,
         cwd
@@ -516,7 +540,8 @@ async function main() {
           "IMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.",
           cli,
           tmpDir,
-          cwd
+          cwd,
+          agentModel[agent]
         );
 
         // Append
@@ -571,7 +596,8 @@ async function main() {
         "IMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items & Risks, and Confidence.",
         cliA,
         tmpDir,
-        cwd
+        cwd,
+        modelA
       );
 
       content = fs.readFileSync(absPath, "utf-8");

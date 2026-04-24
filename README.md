@@ -84,7 +84,7 @@ Any AI that can read markdown and append to a file can participate. Read the pro
 ## Command reference
 
 ```
-/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B] [--lens LENS_ID]
+/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B] [--models A_MODEL,B_MODEL] [--lens LENS_ID]
 /discuss file.md
 ```
 
@@ -108,6 +108,18 @@ Optional. Controls which AI CLI runs each side of the debate in council mode.
 | `codex,claude` | Agent A = Codex, Agent B = Claude |
 | `codex,codex` | Both agents use Codex |
 
+### Models (`--models`)
+
+Optional. Council mode only. Pin specific model versions for each agent — useful for eval reproducibility, calibration, or comparing model generations. Without this flag, each CLI uses its built-in default; the orchestrator records the resolved model into `agent_a_model` / `agent_b_model` in the discussion file's frontmatter after first run, so every discussion is self-documenting.
+
+| Value | What runs |
+|---|---|
+| *(omitted)* | CLI defaults: `claude-opus-4-7` for Claude, `gpt-5.5` for Codex. Resolved model is written into frontmatter. |
+| `claude-opus-4-7,gpt-5.5` | Pin Agent A = Claude Opus 4.7, Agent B = Codex with gpt-5.5 |
+| `claude-opus-4-7,gpt-5.4` | Pin Agent B to an older Codex version (e.g. for re-running an earlier benchmark) |
+
+You can also write `agent_a_model` / `agent_b_model` directly into existing frontmatter — the orchestrator will pin to those values on the next run.
+
 ### Lens (`--lens`)
 
 Optional. Council mode only. Controls the analytical lens pair — what each agent focuses on during research. If omitted, the tool shows a picker with a recommendation based on your topic.
@@ -122,7 +134,7 @@ Lenses apply to the research phase only. During the debate, agents argue from th
 
 ### Design philosophy
 
-There are no flags for model selection, effort level, or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort max` (maximum extended thinking), Codex gets `--full-auto`. The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. The tool is biased toward the best possible outcome, not configurability.
+There are no flags for effort level or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort max` (maximum extended thinking), Codex gets `--full-auto`. The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. Model selection has a single opt-in flag (`--models`) for reproducibility-sensitive use cases — defaults are the latest pinned version for each CLI. The tool is biased toward the best possible outcome, not configurability.
 
 ## How it works
 

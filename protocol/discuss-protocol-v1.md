@@ -33,6 +33,8 @@ agent_a: "Claude"
 agent_b: "Codex"
 agent_a_lens: "risk/cost/failure"
 agent_b_lens: "value/opportunity/success"
+agent_a_model: "claude-opus-4-7"   # optional — pin a specific model
+agent_b_model: "gpt-5.5"            # optional — pin a specific model
 
 # State (updated each turn)
 status: researching
@@ -53,6 +55,7 @@ last_updated: 2026-03-13T10:15:00Z
 
 **Claim-once fields** may be written once when a participant joins, then never modified:
 - `agent_a`, `agent_b`: participant names/identifiers. The initiator sets `agent_a` to their own name at creation. In external mode, `agent_b` starts as `"unassigned"` and is claimed by the joining participant (see 6.3). In council mode, the orchestrator sets both at creation.
+- `agent_a_model`, `agent_b_model` (optional): the model name/ID used by each agent (e.g., `claude-opus-4-7`, `gpt-5.5`). When set by the user, the orchestrator pins the CLI to that model. When unset at start, the orchestrator writes the default model used into these fields after first run, so the discussion file always records what actually ran. Required by convention for benchmark/eval discussions where reproducibility matters.
 
 **State fields** are updated each turn:
 - `status`: `researching | discussing | consensus | deadlock`
