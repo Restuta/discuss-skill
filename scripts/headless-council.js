@@ -74,16 +74,34 @@ function getLensDesc(lensId) {
 // Each profile defines how to invoke a specific AI CLI in headless mode.
 // To add a new CLI, add an entry here.
 
+// Model values flow into shell commands, so they must match a strict
+// allowlist (alphanumerics, dot, hyphen, underscore, slash). Reject
+// anything else loudly — frontmatter is user-controlled and silent
+// rejection would either inject shell or run the wrong model.
+const MODEL_ID_RE = /^[a-zA-Z0-9._/-]+$/;
+function validateModel(model, cliName) {
+  if (!model || !MODEL_ID_RE.test(model)) {
+    throw new Error(
+      `Invalid model id for ${cliName}: ${JSON.stringify(model)}. ` +
+      `Must match ${MODEL_ID_RE}. Check agent_a_model / agent_b_model in frontmatter.`
+    );
+  }
+  return model;
+}
+
 // Each profile has a `defaultModel` (used when no override is set) and a
 // `buildCmd(promptFile, cwd, model)` that takes a resolved model. Override
-// via `agent_a_model` / `agent_b_model` in discussion frontmatter.
+// via `agent_a_model` / `agent_b_model` in discussion frontmatter. Model
+// values are validated against MODEL_ID_RE before any shell interpolation.
 const CLI_PROFILES = {
   claude: {
     name: "Claude",
     binary: "claude",
     defaultModel: "claude-opus-4-7",
-    buildCmd: (promptFile, cwd, model) =>
-      `cd "${cwd}" && cat "${promptFile}" | claude -p --model ${model} --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
+    buildCmd: (promptFile, cwd, model) => {
+      const m = validateModel(model, "claude");
+      return `cd "${cwd}" && cat "${promptFile}" | claude -p --model "${m}" --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`;
+    },
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });
@@ -93,8 +111,10 @@ const CLI_PROFILES = {
     name: "Codex",
     binary: "codex",
     defaultModel: "gpt-5.5",
-    buildCmd: (promptFile, cwd, model) =>
-      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m ${model} -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`,
+    buildCmd: (promptFile, cwd, model) => {
+      const m = validateModel(model, "codex");
+      return `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m "${m}" -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`;
+    },
     check: () => {
       execSync("which codex", { stdio: "pipe" });
     },
@@ -152,7 +172,14 @@ function updateFrontmatter(content, updates) {
   return content.replace(/^---\n([\s\S]*?)\n---/, (_, fm) => {
     let updated = fm;
     for (const [key, val] of Object.entries(updates)) {
-      updated = updated.replace(new RegExp(`^${key}:.*$`, "m"), `${key}: ${val}`);
+      const re = new RegExp(`^${key}:.*$`, "m");
+      if (re.test(updated)) {
+        updated = updated.replace(re, `${key}: ${val}`);
+      } else {
+        // Key absent — append. Strip trailing whitespace/newlines so the
+        // appended line lands cleanly before the closing `---`.
+        updated = updated.replace(/\s*$/, "") + `\n${key}: ${val}`;
+      }
     }
     return `---\n${updated}\n---`;
   });
@@ -444,16 +471,10 @@ async function main() {
   log(`Agent A: ${getProfile(cliA).name} (${cliA}) — model: ${modelA}${fm.agent_a_model ? " (pinned)" : " (default)"}`);
   log(`Agent B: ${getProfile(cliB).name} (${cliB}) — model: ${modelB}${fm.agent_b_model ? " (pinned)" : " (default)"}`);
 
-  // Persist resolved models into frontmatter so the discussion file is
-  // self-documenting about which models actually ran (matters for evals).
-  if (!fm.agent_a_model || !fm.agent_b_model) {
-    content = updateFrontmatter(content, {
-      agent_a_model: modelA,
-      agent_b_model: modelB,
-    });
-    fs.writeFileSync(absPath, content);
-    fm = parseFrontmatter(content);
-  }
+  // Validate model strings BEFORE preflight — fail fast on bad frontmatter
+  // before doing any work.
+  validateModel(modelA, cliA);
+  validateModel(modelB, cliB);
 
   // Preflight — check all required CLIs
   const uniqueClis = [...new Set([cliA, cliB])];
@@ -466,6 +487,18 @@ async function main() {
       `FALLBACK: CLI(s) not available: ${failed.join(", ")}. Use subagent mode instead.`
     );
     process.exit(2);
+  }
+
+  // Persist resolved models into frontmatter AFTER preflight passes, so
+  // the file only records models that were actually about to be invoked
+  // (not models we tried-but-failed to start). Self-documenting for evals.
+  if (!fm.agent_a_model || !fm.agent_b_model) {
+    content = updateFrontmatter(content, {
+      agent_a_model: modelA,
+      agent_b_model: modelB,
+    });
+    fs.writeFileSync(absPath, content);
+    fm = parseFrontmatter(content);
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "discuss-council-"));

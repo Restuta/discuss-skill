@@ -33,8 +33,8 @@ agent_a: "Claude"
 agent_b: "Codex"
 agent_a_lens: "risk/cost/failure"
 agent_b_lens: "value/opportunity/success"
-agent_a_model: "claude-opus-4-7"   # optional — pin a specific model
-agent_b_model: "gpt-5.5"            # optional — pin a specific model
+agent_a_model: "claude-opus-4-7"
+agent_b_model: "gpt-5.5"
 
 # State (updated each turn)
 status: researching
