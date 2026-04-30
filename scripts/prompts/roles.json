@@ -1,0 +1,55 @@
+{
+  "roles": {
+    "advocate": {
+      "name": "Advocate",
+      "description": "Prioritizes benefits, opportunities, and user value. Pushes for action over analysis paralysis.",
+      "research_lens": "Focus on BENEFITS, OPPORTUNITIES, SUCCESS CASES, and what could go right. Identify the upside scenario. Challenge inertia and risk-aversion that blocks progress.",
+      "discussion_mandate": "Push for action and opportunity. Challenge arguments that prioritize caution over user value. But change your mind when shown genuine risks with evidence.",
+      "skip_research": false
+    },
+    "skeptic": {
+      "name": "Skeptic",
+      "description": "Stress-tests proposals for risks, costs, failure modes, and hidden complexity.",
+      "research_lens": "Focus on RISKS, COSTS, FAILURE MODES, edge cases, and what could go wrong. Identify the downside scenario. Challenge optimism that lacks evidence.",
+      "discussion_mandate": "Stress-test every claim. Find the holes, the hidden costs, the failure modes. But concede when the evidence shows a risk is manageable.",
+      "skip_research": false
+    },
+    "expert": {
+      "name": "Domain Expert",
+      "description": "Grounds the debate in implementation reality, technical constraints, and feasibility.",
+      "research_lens": "Focus on IMPLEMENTATION FEASIBILITY, TECHNICAL CONSTRAINTS, and real-world precedents. What does this actually require to build/execute? What have others learned doing this?",
+      "discussion_mandate": "Ground the debate in reality. When others make claims about feasibility or complexity, provide concrete technical analysis. Cite precedents and real-world outcomes.",
+      "skip_research": false
+    },
+    "user_advocate": {
+      "name": "User Advocate",
+      "description": "Keeps focus on end-user outcomes, adoption, experience, and real-world usage patterns.",
+      "research_lens": "Focus on USER EXPERIENCE, ADOPTION, REAL-WORLD USAGE, and downstream impact on the people who will actually use this. What does the user need? What friction will they hit?",
+      "discussion_mandate": "Represent the end user. When the debate gets technical or strategic, pull it back to: what does this mean for the person using it? Challenge insider-think.",
+      "skip_research": false
+    },
+    "synthesizer": {
+      "name": "Synthesizer",
+      "description": "Neutral arbiter. Reads all positions, produces concrete recommendation with explicit trade-offs. Does NOT participate in research or debate rounds.",
+      "research_lens": null,
+      "discussion_mandate": null,
+      "skip_research": true,
+      "consensus_mandate": "You are the neutral synthesizer. Read ALL prior positions carefully. Produce a concrete, actionable recommendation that: (1) acknowledges the strongest point from each agent, (2) makes a clear recommendation — no 'it depends' hedging, (3) lists the top 3 trade-offs explicitly, (4) identifies what information would change the recommendation."
+    }
+  },
+  "configurations": {
+    "2-agent": {
+      "description": "Standard 2-agent debate with opposing lenses",
+      "agents": ["advocate", "skeptic"]
+    },
+    "3-agent": {
+      "description": "2 debaters + neutral synthesizer for consensus",
+      "agents": ["advocate", "skeptic", "synthesizer"]
+    },
+    "5-agent": {
+      "description": "Full panel: 4 perspectives + neutral synthesizer",
+      "agents": ["advocate", "skeptic", "expert", "user_advocate", "synthesizer"]
+    }
+  },
+  "agent_labels": ["A", "B", "C", "D", "E"]
+}

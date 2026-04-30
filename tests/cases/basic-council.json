@@ -1,0 +1,16 @@
+{
+  "name": "basic-council",
+  "description": "Basic council mode with default lens produces valid consensus",
+  "topic": "Should a function return null or throw an exception when it cannot find the requested item?",
+  "max_rounds": 3,
+  "key_questions": [
+    "What are the error handling implications of each approach?",
+    "Which approach produces more predictable caller code?",
+    "Does the answer depend on language or context?"
+  ],
+  "assertions": [
+    { "type": "min_rounds", "value": 1 },
+    { "type": "contains", "value": "## Consensus Summary" },
+    { "type": "contains", "value": "### Decision" }
+  ]
+}

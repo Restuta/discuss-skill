@@ -60,11 +60,19 @@ This installs the `/discuss` command and the council orchestrator script to `~/.
 
 That's it. Two AI instances debate the topic with full reasoning and produce a consensus. Everything runs from one terminal — no copy-pasting between windows, no manual coordination.
 
-By default, both debaters use the same AI you're running the command in — two Claudes in Claude Code, two Codex instances in Codex. To run a cross-model debate:
+By default, both debaters use the same AI you're running the command in — two Claudes in Claude Code, two Codex instances in Codex. **For best results, use cross-model debates** — different models have different blind spots, so Claude + Codex produces better analysis than two instances of either model alone (see [eval results](tests/eval-results/)):
 
 ```
 /discuss "Should we use a monorepo?" monorepo.md --agents claude,codex
 ```
+
+### Discuss a PR
+
+```
+/discuss --pr 123
+```
+
+Two agents debate the design decisions in a pull request — not code style, but architectural tradeoffs, approach, and alternatives. Posts the consensus as a PR comment when done.
 
 ### From Codex CLI
 

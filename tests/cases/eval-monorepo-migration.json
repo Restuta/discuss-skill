@@ -1,0 +1,125 @@
+{
+  "name": "monorepo-migration",
+  "topic": "A B2B SaaS company (50-person engineering org, 8 teams) is experiencing growing pains with their 35 polyrepos. Cross-repo changes require coordinated PRs across 3-5 repos, dependency versions drift, and shared libraries are copy-pasted. Should they migrate to a monorepo?",
+  "key_questions": [
+    "What is the actual migration cost and risk for 35 repos with active development?",
+    "Which problems are best solved by monorepo, and which have simpler solutions (better tooling, stricter dependency management)?",
+    "What organizational changes does a monorepo require (CI/CD, code ownership, merge process)?",
+    "Is there an incremental path, or is this all-or-nothing?"
+  ],
+  "max_rounds": 5,
+  "expert_checklist": [
+    {
+      "id": "ci-blast-radius",
+      "item": "CI/CD pipeline impact — build times, test blast radius, affected-files analysis",
+      "keywords": ["CI", "build time", "blast radius", "pipeline", "affected", "test"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "codeowners",
+      "item": "Code ownership model (CODEOWNERS complexity, review bottlenecks)",
+      "keywords": ["CODEOWNERS", "ownership", "review", "approval", "bottleneck"],
+      "weight": 1,
+      "category": "organizational"
+    },
+    {
+      "id": "dependency-management",
+      "item": "Dependency management — diamond dependencies, version conflicts, single-version policy",
+      "keywords": ["dependency", "diamond", "version conflict", "single version", "lockfile"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "migration-cost",
+      "item": "Migration cost and risk — 35 active repos is non-trivial, history preservation, tooling rewrite",
+      "keywords": ["migration cost", "history", "rewrite", "effort", "months", "risk"],
+      "weight": 2,
+      "category": "business"
+    },
+    {
+      "id": "build-tooling",
+      "item": "Tooling requirements — Bazel, Nx, Turborepo, Rush, or custom build system needed",
+      "keywords": ["Bazel", "Nx", "Turborepo", "Rush", "build system", "tooling"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "git-performance",
+      "item": "Git performance at scale — shallow clones, sparse checkout, VFS for Git",
+      "keywords": ["git performance", "shallow clone", "sparse checkout", "VFS", "slow", "large repo"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "conways-law",
+      "item": "Conway's Law — repo structure mirrors org structure; monorepo implies tighter coupling between teams",
+      "keywords": ["Conway", "org structure", "team autonomy", "coupling", "coordination"],
+      "weight": 2,
+      "category": "organizational"
+    },
+    {
+      "id": "merge-queue",
+      "item": "Merge queue and trunk-based development implications at 50 engineers",
+      "keywords": ["merge queue", "trunk-based", "merge conflict", "main branch", "contention"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "developer-experience",
+      "item": "IDE and developer experience impact — indexing, search, local build times",
+      "keywords": ["IDE", "developer experience", "DX", "indexing", "search", "local"],
+      "weight": 1,
+      "category": "organizational"
+    },
+    {
+      "id": "cross-repo-refactoring",
+      "item": "Cross-repo refactoring friction — the actual pain point driving this discussion",
+      "keywords": ["cross-repo", "refactor", "atomic", "coordinated PR", "breaking change"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "release-independence",
+      "item": "Release independence and deployment coupling — can teams still deploy independently?",
+      "keywords": ["deploy independently", "release", "decouple", "ship", "rollback"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "access-control",
+      "item": "Access control and security boundaries between teams/services",
+      "keywords": ["access control", "security", "permissions", "boundary", "visibility"],
+      "weight": 1,
+      "category": "organizational"
+    },
+    {
+      "id": "incremental-migration",
+      "item": "Incremental migration path — not all-or-nothing, phased approach possible",
+      "keywords": ["incremental", "phased", "gradual", "one repo at a time", "not all-or-nothing"],
+      "weight": 2,
+      "category": "strategic"
+    },
+    {
+      "id": "alternatives",
+      "item": "Alternatives to monorepo that solve the same problems (better dependency tooling, shared package registry, meta-repo)",
+      "keywords": ["alternative", "package registry", "meta-repo", "workspace", "npm link", "shared packages"],
+      "weight": 2,
+      "category": "strategic"
+    }
+  ],
+  "traps": [
+    {
+      "id": "google-survivorship",
+      "description": "Arguing 'Google/Meta use monorepo therefore we should' without acknowledging they built $10M+ custom tooling (Bazel, Buck, Piper)",
+      "detection_keywords": ["Google uses", "Meta uses", "big companies use", "proven at scale"],
+      "caught_keywords": ["custom tooling", "Bazel", "Piper", "millions", "dedicated team", "not comparable"]
+    },
+    {
+      "id": "monorepo-simple",
+      "description": "Claiming monorepo is simpler without addressing CI blast radius, merge contention, and the migration itself",
+      "detection_keywords": ["simpler", "one repo", "easier", "just move"],
+      "caught_keywords": ["CI blast", "merge contention", "migration cost", "build times", "not simple"]
+    }
+  ]
+}

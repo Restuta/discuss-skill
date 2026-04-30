@@ -1,22 +1,20 @@
 #!/usr/bin/env node
 
-// headless-council.js — Orchestrates a council discussion using top-level
-// CLI instances with full reasoning capabilities.
+// headless-council-n.js — N-agent council orchestrator
 //
-// Supports multiple AI CLIs (Claude, Codex, or any CLI that takes a prompt
-// and returns text to stdout). Each agent can use a different CLI.
+// Extends headless-council.js to support 2-5 agents with distinct roles.
+// Backward compatible with 2-agent frontmatter (agent_a/agent_b).
 //
-// Usage: node scripts/headless-council.js <discussion-file.md>
+// Usage: node scripts/headless-council-n.js <discussion-file.md>
 //
-// The discussion file must already exist with frontmatter (topic, agents,
-// lenses, key questions). This script handles research, discussion rounds,
-// validation, and consensus.
+// N-agent frontmatter format:
+//   agent_count: 3
+//   agent_config: "3-agent"     (references roles.json configurations)
+//   agent_cli: "codex"          (all agents use this CLI, or per-agent below)
+//   agent_A_cli: "claude"       (override CLI for specific agent)
+//   agent_B_cli: "codex"
 //
-// Agent CLIs are configured via frontmatter:
-//   agent_a_cli: "claude"   (default)
-//   agent_b_cli: "codex"
-//
-// Supported CLIs: claude, codex (extensible via CLI_PROFILES)
+// Falls back to 2-agent mode if agent_count is absent.
 
 const { execSync, spawn } = require("child_process");
 const fs = require("fs");
@@ -40,68 +38,34 @@ const STATUS = {
   CONVERGED: "converged",
 };
 
-// --- Lens Registry ---
-// Loaded from lenses.json. Each pair defines research and turn prompts for both agents.
+// --- Registries ---
 
-const LENSES_PATH = path.join(__dirname, "prompts", "lenses.json");
-let LENSES;
+const PROMPTS_DIR = path.join(__dirname, "prompts");
+const LENSES_PATH = path.join(PROMPTS_DIR, "lenses.json");
+const ROLES_PATH = path.join(PROMPTS_DIR, "roles.json");
+
+let LENSES, ROLES;
 try {
   LENSES = JSON.parse(fs.readFileSync(LENSES_PATH, "utf-8"));
 } catch (err) {
   console.error(`Failed to load lens registry: ${LENSES_PATH}`);
-  console.error(err.code === "ENOENT" ? "File not found. Re-run install.sh." : err.message);
+  process.exit(1);
+}
+try {
+  ROLES = JSON.parse(fs.readFileSync(ROLES_PATH, "utf-8"));
+} catch (err) {
+  console.error(`Failed to load roles registry: ${ROLES_PATH}`);
   process.exit(1);
 }
 
-function getLensPair(lensId) {
-  const pair = LENSES.pairs.find((p) => p.id === lensId);
-  if (!pair) {
-    const valid = LENSES.pairs.map((p) => p.id).join(", ");
-    throw new Error(`Unknown lens "${lensId}". Available: ${valid}`);
-  }
-  return pair;
-}
-
-function getLensDesc(lensId) {
-  const pair = getLensPair(lensId);
-  return {
-    A: { research: pair.agent_a.research, turn: pair.agent_a.turn },
-    B: { research: pair.agent_b.research, turn: pair.agent_b.turn },
-  };
-}
-
 // --- CLI Profiles ---
-// Each profile defines how to invoke a specific AI CLI in headless mode.
-// To add a new CLI, add an entry here.
 
-// Model values flow into shell commands, so they must match a strict
-// allowlist (alphanumerics, dot, hyphen, underscore, slash). Reject
-// anything else loudly — frontmatter is user-controlled and silent
-// rejection would either inject shell or run the wrong model.
-const MODEL_ID_RE = /^[a-zA-Z0-9._/-]+$/;
-function validateModel(model, cliName) {
-  if (!model || !MODEL_ID_RE.test(model)) {
-    throw new Error(
-      `Invalid model id for ${cliName}: ${JSON.stringify(model)}. ` +
-      `Must match ${MODEL_ID_RE}. Check agent_a_model / agent_b_model in frontmatter.`
-    );
-  }
-  return model;
-}
-
-// Each profile has a `defaultModel` (used when no override is set) and a
-// `buildCmd(promptFile, cwd, model)` that takes a resolved model. Override
-// via `agent_a_model` / `agent_b_model` in discussion frontmatter. Model
-// values are validated against MODEL_ID_RE before any shell interpolation.
 const CLI_PROFILES = {
   claude: {
     name: "Claude",
     binary: "claude",
-    defaultModel: "claude-opus-4-7",
-    buildCmd: (promptFile, cwd, model) => {
-      const m = validateModel(model, "claude");
-      return `cd "${cwd}" && cat "${promptFile}" | claude -p --model "${m}" --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`;
-    },
+    buildCmd: (promptFile, cwd) =>
+      `cd "${cwd}" && cat "${promptFile}" | claude -p --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`,
     check: () => {
       execSync("which claude", { stdio: "pipe" });
       execSync("claude --version", { stdio: "pipe" });
@@ -110,11 +74,8 @@ const CLI_PROFILES = {
   codex: {
     name: "Codex",
     binary: "codex",
-    defaultModel: "gpt-5.5",
-    buildCmd: (promptFile, cwd, model) => {
-      const m = validateModel(model, "codex");
-      return `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m "${m}" -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`;
-    },
+    buildCmd: (promptFile, cwd) =>
+      `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -C "${cwd}" -`,
     check: () => {
       execSync("which codex", { stdio: "pipe" });
     },
@@ -124,7 +85,7 @@ const CLI_PROFILES = {
 // --- Helpers ---
 
 function log(msg) {
-  process.stderr.write(`[council] ${msg}\n`);
+  process.stderr.write(`[council-n] ${msg}\n`);
 }
 
 function getProfile(cliName) {
@@ -139,7 +100,7 @@ function getProfile(cliName) {
 
 function preflight(cliNames) {
   const results = {};
-  for (const name of cliNames) {
+  for (const name of [...new Set(cliNames)]) {
     const profile = getProfile(name);
     try {
       profile.check();
@@ -176,9 +137,7 @@ function updateFrontmatter(content, updates) {
       if (re.test(updated)) {
         updated = updated.replace(re, `${key}: ${val}`);
       } else {
-        // Key absent — append. Strip trailing whitespace/newlines so the
-        // appended line lands cleanly before the closing `---`.
-        updated = updated.replace(/\s*$/, "") + `\n${key}: ${val}`;
+        updated += `\n${key}: ${val}`;
       }
     }
     return `---\n${updated}\n---`;
@@ -194,22 +153,21 @@ function preparePromptFile(promptText, tmpDir) {
   return promptFile;
 }
 
-function runAgent(promptText, cliName, tmpDir, cwd, model) {
+function runAgent(promptText, cliName, tmpDir, cwd) {
   const profile = getProfile(cliName);
-  const resolvedModel = model || profile.defaultModel;
   const promptFile = preparePromptFile(promptText, tmpDir);
-  const cmd = profile.buildCmd(promptFile, cwd, resolvedModel);
+  const cmd = profile.buildCmd(promptFile, cwd);
 
   try {
     const result = execSync(cmd, {
       encoding: "utf-8",
-      timeout: 300000,
-      maxBuffer: 1024 * 1024 * 10,
+      timeout: 600000,
+      maxBuffer: 1024 * 1024 * 50,
       stdio: ["pipe", "pipe", "pipe"],
     });
     return result.trim();
   } catch (err) {
-    log(`${profile.name} call failed: ${err.message}`);
+    log(`${profile.name} call failed: ${(err.message || "").slice(0, 200)}`);
     return null;
   }
 }
@@ -217,32 +175,39 @@ function runAgent(promptText, cliName, tmpDir, cwd, model) {
 function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   return Promise.all(
     agentConfigs.map(
-      ({ promptText, cliName, model }) =>
+      ({ promptText, cliName, label }) =>
         new Promise((resolve) => {
           const profile = getProfile(cliName);
-          const resolvedModel = model || profile.defaultModel;
           const promptFile = preparePromptFile(promptText, tmpDir);
-          const cmd = profile.buildCmd(promptFile, cwd, resolvedModel);
+          const cmd = profile.buildCmd(promptFile, cwd);
 
           const child = spawn("sh", ["-c", cmd], {
             stdio: ["pipe", "pipe", "pipe"],
-            timeout: 300000,
           });
 
           let stdout = "";
           let stderr = "";
           child.stdout.on("data", (d) => (stdout += d));
           child.stderr.on("data", (d) => (stderr += d));
+
+          const timeout = setTimeout(() => {
+            child.kill("SIGTERM");
+            log(`${label || profile.name} timed out after 10min`);
+            resolve(null);
+          }, 600000);
+
           child.on("close", (code) => {
+            clearTimeout(timeout);
             if (code !== 0) {
-              log(`${profile.name} exited ${code}: ${stderr.slice(0, 200)}`);
+              log(`${label || profile.name} exited ${code}: ${stderr.slice(0, 200)}`);
               resolve(null);
             } else {
               resolve(stdout.trim());
             }
           });
           child.on("error", (err) => {
-            log(`${profile.name} spawn error: ${err.message}`);
+            clearTimeout(timeout);
+            log(`${label || profile.name} spawn error: ${err.message}`);
             resolve(null);
           });
         })
@@ -250,11 +215,11 @@ function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   );
 }
 
-function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd, model) {
-  let result = runAgent(promptText, cliName, tmpDir, cwd, model);
+function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd) {
+  let result = runAgent(promptText, cliName, tmpDir, cwd);
   if (!validator(result)) {
     log("Output failed validation, retrying...");
-    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd, model);
+    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd);
     if (!validator(result)) {
       log("Retry also failed. Using raw output.");
     }
@@ -262,25 +227,74 @@ function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd, mo
   return result;
 }
 
+// --- Agent Config Resolution ---
+
+function resolveAgents(fm) {
+  const agentCount = parseInt(fm.agent_count || "2", 10);
+  const configName = fm.agent_config || `${agentCount}-agent`;
+  const defaultCli = fm.agent_cli || "codex";
+
+  const labels = ROLES.agent_labels;
+  const config = ROLES.configurations[configName];
+
+  if (!config) {
+    // Fallback to 2-agent legacy mode
+    log(`No config "${configName}" found, using legacy 2-agent mode`);
+    return [
+      {
+        label: "A",
+        name: fm.agent_a || "Agent A",
+        cli: fm.agent_a_cli || defaultCli,
+        roleId: "advocate",
+        role: ROLES.roles.advocate,
+      },
+      {
+        label: "B",
+        name: fm.agent_b || "Agent B",
+        cli: fm.agent_b_cli || defaultCli,
+        roleId: "skeptic",
+        role: ROLES.roles.skeptic,
+      },
+    ];
+  }
+
+  return config.agents.map((roleId, i) => {
+    const label = labels[i];
+    const role = ROLES.roles[roleId];
+    if (!role) throw new Error(`Unknown role "${roleId}" in config "${configName}"`);
+
+    const cliKey = `agent_${label}_cli`;
+    const cli = fm[cliKey] || fm[`agent_${label.toLowerCase()}_cli`] || defaultCli;
+
+    return {
+      label,
+      name: role.name,
+      cli,
+      roleId,
+      role,
+    };
+  });
+}
+
 // --- Validation ---
 
 function validateResearch(output, agent) {
   if (!output) return false;
-  return output.includes(`### Agent ${agent} — Independent Research | research`);
+  return output.includes(`### Agent ${agent.label}`) && output.includes("Independent Research | research");
 }
 
 function validateResponse(output, round) {
   if (!output) return false;
   const hasHeading = /### Round \d+ — .+ \| response \| confidence: \d+%/.test(output);
-  const hasResponseTo = output.includes("**Response to previous point:**");
+  const hasResponseTo = /\*\*Response to previous point/.test(output);
   const hasNewEvidence = output.includes("**New evidence or angle:**");
   const hasPosition = output.includes("**Current position:**");
-  const hasQuestion = output.includes("**Question for");
+  const hasQuestion = /\*\*.*question/i.test(output);
   if (!hasHeading || !hasResponseTo || !hasNewEvidence || !hasPosition || !hasQuestion)
     return false;
   if (round >= 3) {
     const convergencePattern = Object.values(CONVERGENCE).join("|");
-    if (!new RegExp(`\\*\\*Convergence assessment:\\*\\*|${convergencePattern}`).test(output))
+    if (!new RegExp(`Convergence assessment|${convergencePattern}`).test(output))
       return false;
   }
   return true;
@@ -306,8 +320,6 @@ function extractConvergence(output) {
 
 // --- Templates ---
 
-const PROMPTS_DIR = path.join(__dirname, "prompts");
-
 const templateCache = {};
 function loadTemplate(name) {
   if (!templateCache[name]) {
@@ -322,33 +334,45 @@ function fillTemplate(template, vars) {
 
 // --- Prompt builders ---
 
-function buildResearchPrompt(topic, agent, lensDesc) {
-  return fillTemplate(loadTemplate("research"), {
+function buildResearchPrompt(topic, agent) {
+  return fillTemplate(loadTemplate("n-agent-research"), {
     topic,
-    agent,
-    lensDesc: lensDesc[agent].research,
+    agent: agent.label,
+    agentName: agent.name,
+    roleName: agent.role.name,
+    lensDesc: agent.role.research_lens,
   });
 }
 
-function buildTurnPrompt(agent, fileContent, round) {
-  const otherAgent = agent === "A" ? "Agent B" : "Agent A";
+function buildTurnPrompt(agent, agents, fileContent, round) {
+  const otherAgents = agents
+    .filter((a) => a.label !== agent.label)
+    .map((a) => `${a.name} (Agent ${a.label})`)
+    .join(", ");
+
   const convergenceInstr =
     round >= 3
       ? fillTemplate(loadTemplate("convergence"), { round: String(round) })
       : "";
 
-  // Discussion turns don't use lens — agents argue from genuine assessment
-  return fillTemplate(loadTemplate("turn"), {
-    agent,
-    lensDesc: "",
+  return fillTemplate(loadTemplate("n-agent-turn"), {
+    agent: agent.label,
+    agentName: agent.name,
+    agentCount: String(agents.filter((a) => !a.role.skip_research).length),
+    roleName: agent.role.name,
+    roleMandate: agent.role.discussion_mandate,
     fileContent,
     round: String(round),
-    otherAgent,
+    otherAgents,
     convergenceInstr,
   });
 }
 
-function buildConsensusPrompt(fileContent) {
+function buildConsensusPrompt(fileContent, agents) {
+  const synthesizer = agents.find((a) => a.roleId === "synthesizer");
+  if (synthesizer) {
+    return fillTemplate(loadTemplate("synthesizer-consensus"), { fileContent });
+  }
   return fillTemplate(loadTemplate("consensus"), { fileContent });
 }
 
@@ -369,13 +393,11 @@ function gitCommit(filePath, message, mode) {
 
 // --- Output formatting ---
 
-function formatSummary(fileContent, fm, roundsCompleted, filePath) {
-  const finalFm = parseFrontmatter(fileContent);
-  const agentA = finalFm.agent_a || "Agent A";
-  const agentB = finalFm.agent_b || "Agent B";
-  const statusLabel = finalFm.status === STATUS.DEADLOCK ? "DEADLOCK" : "CONSENSUS";
+function formatSummary(fileContent, agents, roundsCompleted, filePath) {
+  const fm = parseFrontmatter(fileContent);
+  const agentNames = agents.map((a) => a.name).join(" vs ");
+  const statusLabel = fm.status === STATUS.DEADLOCK ? "DEADLOCK" : "CONSENSUS";
 
-  // Extract sections from consensus
   const decisionMatch = fileContent.match(/### Decision\n([\s\S]*?)(?=\n### )/);
   const decision = decisionMatch ? decisionMatch[1].trim() : "[No decision found]";
 
@@ -390,35 +412,28 @@ function formatSummary(fileContent, fm, roundsCompleted, filePath) {
   const confidenceReason = confidenceMatch ? confidenceMatch[2].trim() : "";
 
   const lines = [];
-
   lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  lines.push(`  COUNCIL ${statusLabel}  —  ${agentA} vs ${agentB}  —  ${roundsCompleted} rounds`);
+  lines.push(`  COUNCIL ${statusLabel}  —  ${agentNames}  —  ${roundsCompleted} rounds  —  ${agents.length} agents`);
   lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   lines.push("");
-
   lines.push("## Decision");
   lines.push("");
   lines.push(decision);
   lines.push("");
-
   if (contentionTable) {
     lines.push("## Key Disagreements");
     lines.push("");
     lines.push(contentionTable);
     lines.push("");
   }
-
   if (unresolved) {
     lines.push("## Unresolved");
     lines.push("");
     lines.push(unresolved);
     lines.push("");
   }
-
   lines.push(`## Confidence: ${confidence}`);
-  if (confidenceReason) {
-    lines.push(confidenceReason);
-  }
+  if (confidenceReason) lines.push(confidenceReason);
   lines.push("");
   lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   lines.push(`Full discussion: ${filePath}`);
@@ -427,23 +442,53 @@ function formatSummary(fileContent, fm, roundsCompleted, filePath) {
   return lines.join("\n");
 }
 
-// --- Main ---
+// --- Discussion file creation ---
 
-async function main() {
-  const filePath = process.argv[2];
-  if (!filePath) {
-    console.error("Usage: node scripts/headless-council.js <discussion-file.md>");
-    console.error("");
-    console.error("Configure via frontmatter:");
-    console.error('  agent_a_cli: "claude"   (default)');
-    console.error('  agent_b_cli: "codex"');
-    console.error(`  lens_id: "${LENSES.default}"   (default)`);
-    console.error("");
-    console.error(`Supported CLIs: ${Object.keys(CLI_PROFILES).join(", ")}`);
-    console.error(`Available lenses: ${LENSES.pairs.map((p) => p.id).join(", ")}`);
-    process.exit(1);
+function createDiscussionFile(topic, agents, config, outputPath, extraFm) {
+  const fm = {
+    topic,
+    mode: "council",
+    agent_count: String(agents.length),
+    agent_config: config,
+    ...(extraFm || {}),
+    status: "researching",
+    turn: "A",
+    round: "0",
+    created: new Date().toISOString(),
+    last_updated: new Date().toISOString(),
+  };
+
+  // Add per-agent frontmatter
+  agents.forEach((a) => {
+    fm[`agent_${a.label}_name`] = a.name;
+    fm[`agent_${a.label}_cli`] = a.cli;
+    fm[`agent_${a.label}_role`] = a.roleId;
+  });
+
+  const lines = ["---"];
+  for (const [k, v] of Object.entries(fm)) {
+    lines.push(`${k}: "${v}"`);
   }
+  lines.push("---");
+  lines.push("");
+  lines.push(`# Discussion: ${topic}`);
+  lines.push("");
+  lines.push("## Participants");
+  agents.forEach((a) => {
+    lines.push(`- **Agent ${a.label}** — ${a.name} (${a.roleId}) via ${a.cli}`);
+  });
+  lines.push("");
+  lines.push("## Key Questions");
+  lines.push("1. [To be addressed through structured debate]");
+  lines.push("");
 
+  fs.writeFileSync(outputPath, lines.join("\n"));
+  return outputPath;
+}
+
+// --- Main Orchestration ---
+
+async function runCouncil(filePath) {
   const absPath = path.resolve(filePath);
 
   let content;
@@ -458,114 +503,94 @@ async function main() {
   }
 
   let fm = parseFrontmatter(content);
+  const agents = resolveAgents(fm);
+  const debatingAgents = agents.filter((a) => !a.role.skip_research);
+  const synthesizer = agents.find((a) => a.roleId === "synthesizer");
 
-  // Resolve CLI for each agent (default: claude)
-  const cliA = fm.agent_a_cli || "claude";
-  const cliB = fm.agent_b_cli || "claude";
+  log(`Agents (${agents.length}):`);
+  agents.forEach((a) => log(`  ${a.label}: ${a.name} (${a.roleId}) via ${getProfile(a.cli).name}`));
 
-  // Resolve model for each agent (default: profile.defaultModel).
-  // Override by setting agent_a_model / agent_b_model in frontmatter.
-  const modelA = fm.agent_a_model || getProfile(cliA).defaultModel;
-  const modelB = fm.agent_b_model || getProfile(cliB).defaultModel;
-
-  log(`Agent A: ${getProfile(cliA).name} (${cliA}) — model: ${modelA}${fm.agent_a_model ? " (pinned)" : " (default)"}`);
-  log(`Agent B: ${getProfile(cliB).name} (${cliB}) — model: ${modelB}${fm.agent_b_model ? " (pinned)" : " (default)"}`);
-
-  // Validate model strings BEFORE preflight — fail fast on bad frontmatter
-  // before doing any work.
-  validateModel(modelA, cliA);
-  validateModel(modelB, cliB);
-
-  // Preflight — check all required CLIs
-  const uniqueClis = [...new Set([cliA, cliB])];
-  const preflightResults = preflight(uniqueClis);
-  const allPassed = uniqueClis.every((cli) => preflightResults[cli]);
+  // Preflight
+  const cliNames = agents.map((a) => a.cli);
+  const preflightResults = preflight(cliNames);
+  const allPassed = [...new Set(cliNames)].every((cli) => preflightResults[cli]);
 
   if (!allPassed) {
-    const failed = uniqueClis.filter((cli) => !preflightResults[cli]);
-    console.error(
-      `FALLBACK: CLI(s) not available: ${failed.join(", ")}. Use subagent mode instead.`
-    );
+    const failed = [...new Set(cliNames)].filter((cli) => !preflightResults[cli]);
+    console.error(`FALLBACK: CLI(s) not available: ${failed.join(", ")}`);
     process.exit(2);
   }
 
-  // Persist resolved models into frontmatter AFTER preflight passes, so
-  // the file only records models that were actually about to be invoked
-  // (not models we tried-but-failed to start). Self-documenting for evals.
-  if (!fm.agent_a_model || !fm.agent_b_model) {
-    content = updateFrontmatter(content, {
-      agent_a_model: modelA,
-      agent_b_model: modelB,
-    });
-    fs.writeFileSync(absPath, content);
-    fm = parseFrontmatter(content);
-  }
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "discuss-council-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "discuss-council-n-"));
   log(`Temp directory: ${tmpDir}`);
 
-  const agentCli = { A: cliA, B: cliB };
-  const agentModel = { A: modelA, B: modelB };
   const cwd = path.dirname(absPath);
 
   try {
     const topic = fm.topic;
     const maxRounds = parseInt(fm.max_rounds || "5", 10);
-    const gitMode = fm.git_commit || "final_only";
+    const gitMode = fm.git_commit || "none";
 
-    // Resolve lens pair
-    const lensId = fm.lens_id || LENSES.default;
-    const lensDesc = getLensDesc(lensId);
     log(`Topic: ${topic}`);
-    log(`Lens: ${lensId}`);
     log(`Max rounds: ${maxRounds}, Git: ${gitMode}`);
 
-    // Phase 1: Blind Research
+    // Phase 1: Blind Research (parallel, skip synthesizer)
     if (fm.status === STATUS.RESEARCHING) {
-      log("Phase 1: Blind research (parallel)...");
+      log(`Phase 1: Blind research (${debatingAgents.length} agents in parallel)...`);
 
-      const promptA = buildResearchPrompt(topic, "A", lensDesc);
-      const promptB = buildResearchPrompt(topic, "B", lensDesc);
+      const researchConfigs = debatingAgents.map((agent) => ({
+        promptText: buildResearchPrompt(topic, agent),
+        cliName: agent.cli,
+        label: `${agent.name} (${agent.label})`,
+      }));
 
-      const [resultA, resultB] = await runAgentsParallel(
-        [
-          { promptText: promptA, cliName: cliA, model: modelA },
-          { promptText: promptB, cliName: cliB, model: modelB },
-        ],
-        tmpDir,
-        cwd
-      );
+      const results = await runAgentsParallel(researchConfigs, tmpDir, cwd);
 
-      if (!validateResearch(resultA, "A")) log("WARNING: Agent A research failed validation");
-      if (!validateResearch(resultB, "B")) log("WARNING: Agent B research failed validation");
+      // Validate
+      debatingAgents.forEach((agent, i) => {
+        if (!validateResearch(results[i], agent)) {
+          log(`WARNING: ${agent.name} (${agent.label}) research failed validation`);
+        }
+      });
 
+      // Append research sections
       content = fs.readFileSync(absPath, "utf-8");
-      content += `\n## Research Phase\n\n${resultA || "[Agent A research failed]"}\n\n${resultB || "[Agent B research failed]"}\n\n---\n\n## Discussion\n`;
+      let researchText = "\n## Research Phase\n\n";
+      debatingAgents.forEach((agent, i) => {
+        researchText += `${results[i] || `[${agent.name} (Agent ${agent.label}) research failed]`}\n\n`;
+      });
+      researchText += "---\n\n## Discussion\n";
+
+      content += researchText;
       content = updateFrontmatter(content, {
         status: STATUS.DISCUSSING,
-        turn: "A",
+        turn: debatingAgents[0].label,
         round: "1",
         last_updated: new Date().toISOString(),
       });
       fs.writeFileSync(absPath, content);
 
-      gitCommit(absPath, "discuss: initial research complete", gitMode === "every_turn" ? "every_turn" : "none");
+      if (gitMode === "every_turn") {
+        gitCommit(absPath, "discuss: initial research complete", "every_turn");
+      }
       log("Research phase complete.");
     }
 
-    // Phase 2: Discussion Rounds
+    // Phase 2: Discussion Rounds (round-robin among debating agents)
     content = fs.readFileSync(absPath, "utf-8");
     fm = parseFrontmatter(content);
     let round = parseInt(fm.round || "1", 10);
     let status = fm.status;
+    let convergenceCount = 0;
 
     while (status === STATUS.DISCUSSING && round <= maxRounds) {
-      for (const agent of ["A", "B"]) {
-        const cli = agentCli[agent];
-        log(`Round ${round} — Agent ${agent} (${getProfile(cli).name})...`);
+      for (let i = 0; i < debatingAgents.length; i++) {
+        const agent = debatingAgents[i];
+        const cli = agent.cli;
+        log(`Round ${round} — ${agent.name} (Agent ${agent.label}, ${getProfile(cli).name})...`);
 
         content = fs.readFileSync(absPath, "utf-8");
-        const prompt = buildTurnPrompt(agent, content, round);
+        const prompt = buildTurnPrompt(agent, debatingAgents, content, round);
 
         const result = runWithRetry(
           prompt,
@@ -573,24 +598,26 @@ async function main() {
           "IMPORTANT: Your previous response was malformed. Follow the EXACT format specified above. Every section is required.",
           cli,
           tmpDir,
-          cwd,
-          agentModel[agent]
+          cwd
         );
+
+        // Determine next turn
+        const isLastInRound = i === debatingAgents.length - 1;
+        const nextAgent = isLastInRound ? debatingAgents[0] : debatingAgents[i + 1];
+        const nextRound = isLastInRound ? round + 1 : round;
 
         // Append
         content = fs.readFileSync(absPath, "utf-8");
-        const nextAgent = agent === "A" ? "B" : "A";
-        const nextRound = agent === "B" ? round + 1 : round;
-        content += `\n${result || `[Agent ${agent} Round ${round} failed]`}\n`;
+        content += `\n${result || `[${agent.name} (Agent ${agent.label}) Round ${round} failed]`}\n`;
         content = updateFrontmatter(content, {
-          turn: nextAgent,
+          turn: nextAgent.label,
           round: String(nextRound),
           last_updated: new Date().toISOString(),
         });
         fs.writeFileSync(absPath, content);
 
         if (gitMode === "every_turn") {
-          gitCommit(absPath, `discuss: round ${round} — Agent ${agent} response`, "every_turn");
+          gitCommit(absPath, `discuss: round ${round} — ${agent.name} response`, "every_turn");
         }
 
         // Convergence check (round 3+)
@@ -601,12 +628,22 @@ async function main() {
             status = STATUS.DEADLOCK;
             break;
           }
-          if ((conv === CONVERGENCE.CONVERGING || conv === CONVERGENCE.PARALLEL) && agent === "B") {
-            log(`${conv} — both agents aligned, moving to consensus.`);
-            status = STATUS.CONVERGED;
-            break;
+          if (conv === CONVERGENCE.CONVERGING || conv === CONVERGENCE.PARALLEL) {
+            convergenceCount++;
+            // Need majority of agents to agree on convergence
+            const threshold = Math.ceil(debatingAgents.length / 2);
+            if (convergenceCount >= threshold) {
+              log(`${conv} — ${convergenceCount}/${debatingAgents.length} agents converged, moving to consensus.`);
+              status = STATUS.CONVERGED;
+              break;
+            }
           }
         }
+      }
+
+      // Reset convergence count at end of round if not converged
+      if (status === STATUS.DISCUSSING) {
+        convergenceCount = 0;
       }
 
       if (status !== STATUS.DISCUSSING) break;
@@ -623,14 +660,18 @@ async function main() {
       log("Phase 3: Writing consensus...");
       content = fs.readFileSync(absPath, "utf-8");
 
+      // Use synthesizer if available, otherwise first agent
+      const consensusCli = synthesizer ? synthesizer.cli : debatingAgents[0].cli;
+      const consensusLabel = synthesizer ? `Synthesizer (${getProfile(consensusCli).name})` : getProfile(consensusCli).name;
+      log(`Consensus writer: ${consensusLabel}`);
+
       const consensus = runWithRetry(
-        buildConsensusPrompt(content),
+        buildConsensusPrompt(content, agents),
         validateConsensus,
         "IMPORTANT: Follow the EXACT format. Include Decision, Key Contention Points table, Unresolved Items & Risks, and Confidence.",
-        cliA,
+        consensusCli,
         tmpDir,
-        cwd,
-        modelA
+        cwd
       );
 
       content = fs.readFileSync(absPath, "utf-8");
@@ -652,14 +693,38 @@ async function main() {
 
     // Print formatted summary to stdout
     const finalContent = fs.readFileSync(absPath, "utf-8");
-    console.log(formatSummary(finalContent, fm, round, absPath));
+    console.log(formatSummary(finalContent, agents, round, absPath));
+
+    return { filePath: absPath, status: finalFm.status, rounds: round, agents: agents.length };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
     log("Temp directory cleaned up.");
   }
 }
 
-main().catch((err) => {
-  console.error(`Fatal: ${err.message}`);
-  process.exit(1);
-});
+// --- Exports (for eval runner) ---
+module.exports = { runCouncil, createDiscussionFile, resolveAgents, parseFrontmatter, ROLES, CLI_PROFILES };
+
+// --- CLI entry ---
+if (require.main === module) {
+  const filePath = process.argv[2];
+  if (!filePath) {
+    console.error("Usage: node scripts/headless-council-n.js <discussion-file.md>");
+    console.error("");
+    console.error("N-agent frontmatter fields:");
+    console.error('  agent_count: "3"');
+    console.error('  agent_config: "3-agent"');
+    console.error('  agent_cli: "codex"          (default CLI for all agents)');
+    console.error('  agent_A_cli: "claude"        (override per agent)');
+    console.error("");
+    console.error(`Available configs: ${Object.keys(ROLES.configurations).join(", ")}`);
+    console.error(`Available roles: ${Object.keys(ROLES.roles).join(", ")}`);
+    console.error(`Supported CLIs: ${Object.keys(CLI_PROFILES).join(", ")}`);
+    process.exit(1);
+  }
+
+  runCouncil(filePath).catch((err) => {
+    console.error(`Fatal: ${err.message}`);
+    process.exit(1);
+  });
+}

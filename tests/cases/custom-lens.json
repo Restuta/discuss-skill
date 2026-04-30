@@ -1,0 +1,17 @@
+{
+  "name": "custom-lens",
+  "description": "Simplicity-vs-correctness lens applies to research, not to debate turns",
+  "topic": "Should we add input validation at every layer or only at the API boundary?",
+  "lens_id": "simplicity-vs-correctness",
+  "agent_a_lens": "simplicity/pragmatism",
+  "agent_b_lens": "correctness/rigor",
+  "max_rounds": 3,
+  "key_questions": [
+    "Does defense-in-depth justify the duplication cost?",
+    "What happens when validation rules drift between layers?"
+  ],
+  "assertions": [
+    { "type": "contains", "value": "## Consensus Summary" },
+    { "type": "contains", "value": "### Decision" }
+  ]
+}

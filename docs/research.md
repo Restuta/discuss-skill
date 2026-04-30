@@ -46,6 +46,12 @@ Eo et al. show that debate does not need to happen on every problem, and adaptiv
 
 Source: [Debate Only When Necessary: Adaptive Multiagent Collaboration for Efficient LLM Reasoning](https://arxiv.org/abs/2504.05047)
 
+### Agent roles and multi-agent chat rooms
+
+MindStudio (2026) provides a practical guide to multi-agent debate with distinct personas (advocate, skeptic, synthesizer). Recommends 3-5 agents with a neutral synthesizer for tie-breaking. Our own eval (15 discussions, 5 configs, 3 topics) found that 3 agents with synthesizer matches cross-model quality, but 5 agents is counterproductive — agents go deep on their role's angle and lose breadth. Cross-model diversity (Claude + Codex) consistently outperforms same-model multi-agent setups.
+
+Source: [How to Build Agent Chat Rooms: Multi-Agent Debate for Better AI Outputs](https://www.mindstudio.ai/blog/agent-chat-rooms-multi-agent-debate-claude-code)
+
 ## Caveat
 
 A [2025 ICLR analysis](https://d2jud02ci9yv69.cloudfront.net/2025-04-28-mad-159/blog/mad/) noted that multi-agent debate doesn't consistently outperform simpler methods like chain-of-thought on all benchmarks. The benefits are most pronounced on tasks requiring diverse perspectives, factual verification, and structured reasoning —which is exactly what this tool targets.

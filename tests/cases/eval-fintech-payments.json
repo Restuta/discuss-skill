@@ -1,0 +1,132 @@
+{
+  "name": "fintech-payments",
+  "topic": "Should a fintech startup (Series A, 20 engineers, processing $50M/year in transactions) build their own payment processing infrastructure or continue using Stripe? They're currently paying ~$1.5M/year in Stripe fees and expect 3x volume growth in 18 months.",
+  "key_questions": [
+    "What is the true total cost of ownership for in-house payment processing vs Stripe at current and projected volumes?",
+    "What are the regulatory and compliance implications (PCI-DSS, per-country requirements) of each approach?",
+    "Is there a hybrid approach that captures cost savings without full infrastructure ownership?",
+    "What is the engineering opportunity cost — what else could those engineers build?"
+  ],
+  "max_rounds": 5,
+  "expert_checklist": [
+    {
+      "id": "pci-dss",
+      "item": "PCI-DSS compliance scope and Level 1 certification cost",
+      "keywords": ["PCI", "compliance", "certification", "Level 1", "SAQ", "audit"],
+      "weight": 2,
+      "category": "regulatory"
+    },
+    {
+      "id": "interchange-fees",
+      "item": "Interchange fee economics — Stripe markup vs direct processor rates at volume",
+      "keywords": ["interchange", "processing fee", "basis points", "markup", "2.9%"],
+      "weight": 2,
+      "category": "business"
+    },
+    {
+      "id": "multi-currency",
+      "item": "Multi-currency and cross-border settlement complexity",
+      "keywords": ["multi-currency", "cross-border", "settlement", "FX", "exchange"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "chargeback",
+      "item": "Chargeback and dispute handling infrastructure",
+      "keywords": ["chargeback", "dispute", "representment", "fraud"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "fraud-detection",
+      "item": "Fraud detection and risk scoring (Stripe Radar equivalent)",
+      "keywords": ["fraud", "risk scoring", "Radar", "ML", "detection"],
+      "weight": 2,
+      "category": "technical"
+    },
+    {
+      "id": "3ds-sca",
+      "item": "3D Secure / Strong Customer Authentication regulatory requirements",
+      "keywords": ["3D Secure", "3DS", "SCA", "authentication", "PSD2"],
+      "weight": 1,
+      "category": "regulatory"
+    },
+    {
+      "id": "payment-methods",
+      "item": "Payment method coverage beyond cards (ACH, wire, SEPA, BNPL, wallets)",
+      "keywords": ["ACH", "wire", "SEPA", "BNPL", "Apple Pay", "Google Pay", "wallet", "payment method"],
+      "weight": 1,
+      "category": "product"
+    },
+    {
+      "id": "reconciliation",
+      "item": "Reconciliation, settlement, and accounting integration complexity",
+      "keywords": ["reconciliation", "settlement", "accounting", "ledger", "bookkeeping"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "vendor-lock-in",
+      "item": "Vendor lock-in and data portability concerns",
+      "keywords": ["lock-in", "portability", "migration", "dependency", "switching cost"],
+      "weight": 1,
+      "category": "strategic"
+    },
+    {
+      "id": "team-expertise",
+      "item": "Team expertise gap — payments engineering is specialized, hiring is hard",
+      "keywords": ["hiring", "expertise", "specialized", "talent", "team", "knowledge"],
+      "weight": 2,
+      "category": "organizational"
+    },
+    {
+      "id": "opportunity-cost",
+      "item": "Engineering opportunity cost — what else could those engineers build?",
+      "keywords": ["opportunity cost", "instead", "focus", "core product", "distraction"],
+      "weight": 2,
+      "category": "strategic"
+    },
+    {
+      "id": "time-to-market",
+      "item": "Time-to-market impact and competitive window",
+      "keywords": ["time to market", "competitive", "window", "speed", "timeline", "months"],
+      "weight": 1,
+      "category": "business"
+    },
+    {
+      "id": "hybrid-approach",
+      "item": "Hybrid approach — use Stripe now, migrate hot path later (or Stripe Connect, custom integration tiers)",
+      "keywords": ["hybrid", "incremental", "phased", "Stripe Connect", "partial", "migrate later"],
+      "weight": 2,
+      "category": "strategic"
+    },
+    {
+      "id": "uptime-sla",
+      "item": "Uptime SLAs, disaster recovery, and incident response for payment critical path",
+      "keywords": ["uptime", "SLA", "disaster recovery", "incident", "availability", "99.99"],
+      "weight": 1,
+      "category": "technical"
+    },
+    {
+      "id": "regulatory-reporting",
+      "item": "Regulatory reporting obligations (money transmission, per-state/country licensing)",
+      "keywords": ["money transmission", "license", "regulatory reporting", "MSB", "FinCEN"],
+      "weight": 1,
+      "category": "regulatory"
+    }
+  ],
+  "traps": [
+    {
+      "id": "just-use-stripe",
+      "description": "Dismissing in-house entirely without analyzing volume economics — at $50M/year growing to $150M, the fee delta is material",
+      "detection_keywords": ["just use Stripe", "no reason to build", "always outsource"],
+      "caught_keywords": ["at scale", "fee economics", "margin", "volume", "$1.5M", "growing"]
+    },
+    {
+      "id": "build-for-margins",
+      "description": "Advocating full in-house build without accounting for PCI scope, fraud detection complexity, and 20-engineer team capacity",
+      "detection_keywords": ["build everything", "save millions", "simple to build"],
+      "caught_keywords": ["PCI", "fraud detection", "team size", "20 engineers", "capacity", "specialized"]
+    }
+  ]
+}
