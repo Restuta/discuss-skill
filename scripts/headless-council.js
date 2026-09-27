@@ -89,18 +89,36 @@ function validateModel(model, cliName) {
   return model;
 }
 
-// Each profile has a `defaultModel` (used when no override is set) and a
-// `buildCmd(promptFile, cwd, model)` that takes a resolved model. Override
-// via `agent_a_model` / `agent_b_model` in discussion frontmatter. Model
-// values are validated against MODEL_ID_RE before any shell interpolation.
+// Effort values flow into shell commands too, so they come from a fixed
+// allowlist. Each CLI accepts its own subset; an unsupported value fails
+// before any agent runs instead of mid-discussion.
+function validateEffort(effort, cliName) {
+  const allowed = getProfile(cliName).efforts;
+  if (!allowed.includes(effort)) {
+    throw new Error(
+      `Invalid effort for ${cliName}: ${JSON.stringify(effort)}. ` +
+      `Must be one of ${allowed.join(", ")}. Check agent_a_effort / agent_b_effort in frontmatter.`
+    );
+  }
+  return effort;
+}
+
+// Each profile has a `defaultModel` and `defaultEffort` (used when no
+// override is set) and a `buildCmd(promptFile, cwd, model, effort)` that
+// takes resolved values. Override via `agent_a_model` / `agent_b_model` and
+// `agent_a_effort` / `agent_b_effort` in discussion frontmatter. Both are
+// validated before any shell interpolation.
 const CLI_PROFILES = {
   claude: {
     name: "Claude",
     binary: "claude",
     defaultModel: "claude-opus-5",
-    buildCmd: (promptFile, cwd, model) => {
+    defaultEffort: "max",
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    buildCmd: (promptFile, cwd, model, effort) => {
       const m = validateModel(model, "claude");
-      return `cd "${cwd}" && cat "${promptFile}" | claude -p --model "${m}" --effort max --output-format text --allowedTools "Read,Grep,Glob,Bash"`;
+      const e = validateEffort(effort, "claude");
+      return `cd "${cwd}" && cat "${promptFile}" | claude -p --model "${m}" --effort ${e} --output-format text --allowedTools "Read,Grep,Glob,Bash"`;
     },
     check: () => {
       execSync("which claude", { stdio: "pipe" });
@@ -111,9 +129,14 @@ const CLI_PROFILES = {
     name: "Codex",
     binary: "codex",
     defaultModel: "gpt-5.6-sol",
-    buildCmd: (promptFile, cwd, model) => {
+    defaultEffort: "xhigh",
+    efforts: ["low", "medium", "high", "xhigh", "max"],
+    buildCmd: (promptFile, cwd, model, effort) => {
       const m = validateModel(model, "codex");
-      return `cat "${promptFile}" | codex exec --full-auto --skip-git-repo-check -m "${m}" -c model_reasoning_effort='"xhigh"' -C "${cwd}" -`;
+      const e = validateEffort(effort, "codex");
+      // Read-only sandbox: a debater researches and argues; it never edits
+      // the repository it was pointed at.
+      return `cat "${promptFile}" | codex exec -s read-only --skip-git-repo-check -m "${m}" -c model_reasoning_effort='"${e}"' -C "${cwd}" -`;
     },
     check: () => {
       execSync("which codex", { stdio: "pipe" });
@@ -194,16 +217,21 @@ function preparePromptFile(promptText, tmpDir) {
   return promptFile;
 }
 
-function runAgent(promptText, cliName, tmpDir, cwd, model) {
+// Per-call ceiling. Max-effort turns routinely run past 5 minutes, and a
+// killed turn is a lost round, so the ceiling is 30 minutes.
+const AGENT_TIMEOUT_MS = 1800000;
+
+function runAgent(promptText, cliName, tmpDir, cwd, model, effort) {
   const profile = getProfile(cliName);
   const resolvedModel = model || profile.defaultModel;
+  const resolvedEffort = effort || profile.defaultEffort;
   const promptFile = preparePromptFile(promptText, tmpDir);
-  const cmd = profile.buildCmd(promptFile, cwd, resolvedModel);
+  const cmd = profile.buildCmd(promptFile, cwd, resolvedModel, resolvedEffort);
 
   try {
     const result = execSync(cmd, {
       encoding: "utf-8",
-      timeout: 300000,
+      timeout: AGENT_TIMEOUT_MS,
       maxBuffer: 1024 * 1024 * 10,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -217,16 +245,17 @@ function runAgent(promptText, cliName, tmpDir, cwd, model) {
 function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   return Promise.all(
     agentConfigs.map(
-      ({ promptText, cliName, model }) =>
+      ({ promptText, cliName, model, effort }) =>
         new Promise((resolve) => {
           const profile = getProfile(cliName);
           const resolvedModel = model || profile.defaultModel;
+          const resolvedEffort = effort || profile.defaultEffort;
           const promptFile = preparePromptFile(promptText, tmpDir);
-          const cmd = profile.buildCmd(promptFile, cwd, resolvedModel);
+          const cmd = profile.buildCmd(promptFile, cwd, resolvedModel, resolvedEffort);
 
           const child = spawn("sh", ["-c", cmd], {
             stdio: ["pipe", "pipe", "pipe"],
-            timeout: 300000,
+            timeout: AGENT_TIMEOUT_MS,
           });
 
           let stdout = "";
@@ -250,11 +279,11 @@ function runAgentsParallel(agentConfigs, tmpDir, cwd) {
   );
 }
 
-function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd, model) {
-  let result = runAgent(promptText, cliName, tmpDir, cwd, model);
+function runWithRetry(promptText, validator, retryHint, cliName, tmpDir, cwd, model, effort) {
+  let result = runAgent(promptText, cliName, tmpDir, cwd, model, effort);
   if (!validator(result)) {
     log("Output failed validation, retrying...");
-    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd, model);
+    result = runAgent(promptText + "\n\n" + retryHint, cliName, tmpDir, cwd, model, effort);
     if (!validator(result)) {
       log("Retry also failed. Using raw output.");
     }
@@ -468,13 +497,20 @@ async function main() {
   const modelA = fm.agent_a_model || getProfile(cliA).defaultModel;
   const modelB = fm.agent_b_model || getProfile(cliB).defaultModel;
 
-  log(`Agent A: ${getProfile(cliA).name} (${cliA}) — model: ${modelA}${fm.agent_a_model ? " (pinned)" : " (default)"}`);
-  log(`Agent B: ${getProfile(cliB).name} (${cliB}) — model: ${modelB}${fm.agent_b_model ? " (pinned)" : " (default)"}`);
+  // Resolve effort the same way (default: profile.defaultEffort).
+  // Override by setting agent_a_effort / agent_b_effort in frontmatter.
+  const effortA = fm.agent_a_effort || getProfile(cliA).defaultEffort;
+  const effortB = fm.agent_b_effort || getProfile(cliB).defaultEffort;
 
-  // Validate model strings BEFORE preflight — fail fast on bad frontmatter
-  // before doing any work.
+  log(`Agent A: ${getProfile(cliA).name} (${cliA}) — model: ${modelA}${fm.agent_a_model ? " (pinned)" : " (default)"}, effort: ${effortA}${fm.agent_a_effort ? " (pinned)" : " (default)"}`);
+  log(`Agent B: ${getProfile(cliB).name} (${cliB}) — model: ${modelB}${fm.agent_b_model ? " (pinned)" : " (default)"}, effort: ${effortB}${fm.agent_b_effort ? " (pinned)" : " (default)"}`);
+
+  // Validate model and effort strings BEFORE preflight — fail fast on bad
+  // frontmatter before doing any work.
   validateModel(modelA, cliA);
   validateModel(modelB, cliB);
+  validateEffort(effortA, cliA);
+  validateEffort(effortB, cliB);
 
   // Preflight — check all required CLIs
   const uniqueClis = [...new Set([cliA, cliB])];
@@ -492,10 +528,12 @@ async function main() {
   // Persist resolved models into frontmatter AFTER preflight passes, so
   // the file only records models that were actually about to be invoked
   // (not models we tried-but-failed to start). Self-documenting for evals.
-  if (!fm.agent_a_model || !fm.agent_b_model) {
+  if (!fm.agent_a_model || !fm.agent_b_model || !fm.agent_a_effort || !fm.agent_b_effort) {
     content = updateFrontmatter(content, {
       agent_a_model: modelA,
       agent_b_model: modelB,
+      agent_a_effort: effortA,
+      agent_b_effort: effortB,
     });
     fs.writeFileSync(absPath, content);
     fm = parseFrontmatter(content);
@@ -506,6 +544,7 @@ async function main() {
 
   const agentCli = { A: cliA, B: cliB };
   const agentModel = { A: modelA, B: modelB };
+  const agentEffort = { A: effortA, B: effortB };
   const cwd = path.dirname(absPath);
 
   try {
@@ -529,8 +568,8 @@ async function main() {
 
       const [resultA, resultB] = await runAgentsParallel(
         [
-          { promptText: promptA, cliName: cliA, model: modelA },
-          { promptText: promptB, cliName: cliB, model: modelB },
+          { promptText: promptA, cliName: cliA, model: modelA, effort: effortA },
+          { promptText: promptB, cliName: cliB, model: modelB, effort: effortB },
         ],
         tmpDir,
         cwd
@@ -574,7 +613,8 @@ async function main() {
           cli,
           tmpDir,
           cwd,
-          agentModel[agent]
+          agentModel[agent],
+          agentEffort[agent]
         );
 
         // Append
@@ -630,7 +670,8 @@ async function main() {
         cliA,
         tmpDir,
         cwd,
-        modelA
+        modelA,
+        effortA
       );
 
       content = fs.readFileSync(absPath, "utf-8");
