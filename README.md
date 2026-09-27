@@ -84,7 +84,7 @@ Any AI that can read markdown and append to a file can participate. Read the pro
 ## Command reference
 
 ```
-/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B] [--models A_MODEL,B_MODEL] [--lens LENS_ID]
+/discuss "topic" file.md [--mode external] [--agents CLI_A,CLI_B] [--models A_MODEL,B_MODEL] [--efforts A_EFFORT,B_EFFORT] [--lens LENS_ID]
 /discuss file.md
 ```
 
@@ -119,6 +119,15 @@ Optional. Council mode only. Pin specific model versions for each agent — usef
 
 You can also write `agent_a_model` / `agent_b_model` directly into existing frontmatter — the orchestrator will pin to those values on the next run.
 
+### Effort (`--efforts`)
+
+Optional. Council mode only. Pin reasoning effort per agent. Allowed values: `low`, `medium`, `high`, `xhigh`, `max`, checked before any agent runs. The resolved efforts are written into `agent_a_effort` / `agent_b_effort` in frontmatter.
+
+| Value | What runs |
+|---|---|
+| *(omitted)* | Claude at `max`, Codex at `xhigh` |
+| `max,max` | Both agents at `max` (the model must support it) |
+
 ### Lens (`--lens`)
 
 Optional. Council mode only. Controls the analytical lens pair — what each agent focuses on during research. If omitted, the tool shows a picker with a recommendation based on your topic.
@@ -133,7 +142,7 @@ Lenses apply to the research phase only. During the debate, agents argue from th
 
 ### Design philosophy
 
-There are no flags for effort level or reasoning quality. Council mode always uses the best available reasoning for each CLI — Claude gets `--effort max` (maximum extended thinking), Codex gets `--full-auto`. The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. Model selection has a single opt-in flag (`--models`) for reproducibility-sensitive use cases — defaults are the latest pinned version for each CLI. The tool is biased toward the best possible outcome, not configurability.
+Council mode defaults to the best available reasoning for each CLI — Claude gets `--effort max` (maximum extended thinking), Codex gets `xhigh` in a read-only sandbox. `--efforts` is an opt-in override, like `--models`, for models whose ceiling is higher than the default (for example a Codex model that accepts `max`). The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. Model selection has a single opt-in flag (`--models`) for reproducibility-sensitive use cases — defaults are the latest pinned version for each CLI. The tool is biased toward the best possible outcome, not configurability.
 
 ## How it works
 

@@ -8,6 +8,7 @@ A single command for structured, turn-based AI discussions. Supports three modes
 /discuss "topic" file.md                              → council mode (default): orchestrates two Claude instances debating to completion
 /discuss "topic" file.md --agents claude,codex        → council with cross-model debate (Claude vs Codex)
 /discuss "topic" file.md --models MODEL_A,MODEL_B     → pin specific model versions (e.g. claude-opus-5,gpt-5.6-sol); for eval reproducibility
+/discuss "topic" file.md --efforts EFFORT_A,EFFORT_B  → pin reasoning effort per agent (e.g. max,max); defaults: claude max, codex xhigh
 /discuss "topic" file.md --mode external              → external mode: creates discussion file, waits for another AI to join manually
 /discuss file.md                                      → join mode: joins an existing discussion as a participant
 ```
@@ -51,6 +52,7 @@ Parse the user's input to determine the mode:
    - Check for `--mode external` flag → external mode
    - Check for `--agents X,Y` flag (council mode only) → set `agent_a_cli` and `agent_b_cli` (e.g. `--agents claude,codex`)
    - Check for `--models A_MODEL,B_MODEL` flag (council mode only) → set `agent_a_model` and `agent_b_model` directly in frontmatter (e.g. `--models claude-opus-5,gpt-5.6-sol`). Use this when you need a specific model version for reproducibility (eval benchmarks, calibrations). Without this flag the orchestrator uses each CLI's default model and writes the resolved name back into frontmatter after first run.
+   - Check for `--efforts A_EFFORT,B_EFFORT` flag (council mode only) → set `agent_a_effort` and `agent_b_effort` directly in frontmatter (e.g. `--efforts max,max`). Allowed values: `low`, `medium`, `high`, `xhigh`, `max`. Without this flag Claude runs at `max` and Codex at `xhigh`; the orchestrator writes the resolved efforts back into frontmatter after first run.
    - Check for `--lens LENS_ID` flag (council mode only) → set `lens_id` directly, skip picker. Validate against the IDs in `~/.claude/scripts/prompts/lenses.json`. If the ID is not found, error with the list of valid IDs from the registry.
    - Otherwise → council mode (default)
 2. If **only a file path** is provided and the file exists → join mode
@@ -200,7 +202,7 @@ Council mode supports running different AI CLIs for each agent. Set `agent_a_cli
 
 Supported CLIs:
 - `claude` — Claude Code CLI (`claude -p --model claude-opus-5 --effort max`)
-- `codex` — OpenAI Codex CLI (`codex exec --full-auto -m gpt-5.6-sol -c 'model_reasoning_effort="xhigh"'`)
+- `codex` — OpenAI Codex CLI (`codex exec -s read-only -m gpt-5.6-sol -c 'model_reasoning_effort="xhigh"'`)
 
 When the user specifies `--agents claude,codex` (or similar), parse the comma-separated values and set `agent_a_cli` and `agent_b_cli` accordingly in the frontmatter. Agent names in the frontmatter should reflect the CLI: e.g. `agent_a: "Claude"`, `agent_b: "Codex"`.
 
@@ -220,6 +222,16 @@ When you need a specific version (eval reproducibility, calibration, comparing m
 ```
 
 Or write `agent_a_model` / `agent_b_model` directly into existing frontmatter — the orchestrator will pin to those values on the next run.
+
+### Pinning reasoning effort
+
+Defaults: Claude runs at `max`, Codex at `xhigh`. Pin per agent with `--efforts` (or `agent_a_effort` / `agent_b_effort` in frontmatter), for example to run a newer Codex model at `max`:
+
+```
+/discuss "topic" discussion.md --agents claude,codex --models claude-opus-5-5,gpt-6-astra --efforts max,max
+```
+
+Values are checked against an allow-list (`low`, `medium`, `high`, `xhigh`, `max`) before any agent runs. The model must support the effort you pin; probe it once (`codex exec -m <model> -c model_reasoning_effort='"max"' -`) when unsure.
 
 ### Orchestration
 
