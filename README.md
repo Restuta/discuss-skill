@@ -114,8 +114,8 @@ Optional. Council mode only. Pin specific model versions for each agent — usef
 
 | Value | What runs |
 |---|---|
-| *(omitted)* | CLI defaults: `claude-opus-5` for Claude, `gpt-5.6-sol` for Codex. Resolved model is written into frontmatter. |
-| `claude-opus-5,gpt-5.6-sol` | Pin Agent A = Claude Opus 5, Agent B = Codex with GPT-5.6 Sol |
+| *(omitted)* | CLI defaults: `claude-opus-5-5` for Claude, `gpt-6.2-astra` for Codex. Resolved model is written into frontmatter. |
+| `claude-opus-5-5,gpt-6.2-astra` | Pin Agent A = Claude Opus 5.5, Agent B = Codex with GPT-6.2 Astra |
 
 You can also write `agent_a_model` / `agent_b_model` directly into existing frontmatter — the orchestrator will pin to those values on the next run.
 
@@ -125,8 +125,8 @@ Optional. Council mode only. Pin reasoning effort per agent. Allowed values: `lo
 
 | Value | What runs |
 |---|---|
-| *(omitted)* | Claude at `max`, Codex at `xhigh` |
-| `max,max` | Both agents at `max` (the model must support it) |
+| *(omitted)* | Claude at `high`, Codex at `high` |
+| `xhigh,high` | Agent A at `xhigh`, Agent B at `high` (the model must support the effort you pin) |
 
 ### Lens (`--lens`)
 
@@ -142,7 +142,7 @@ Lenses apply to the research phase only. During the debate, agents argue from th
 
 ### Design philosophy
 
-Council mode defaults to the best available reasoning for each CLI — Claude gets `--effort max` (maximum extended thinking), Codex gets `xhigh` in a read-only sandbox. `--efforts` is an opt-in override, like `--models`, for models whose ceiling is higher than the default (for example a Codex model that accepts `max`). The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. Model selection has a single opt-in flag (`--models`) for reproducibility-sensitive use cases — defaults are the latest pinned version for each CLI. The tool is biased toward the best possible outcome, not configurability.
+Council mode defaults to the newest model for each CLI at `high` effort — Claude gets `--effort high`, Codex gets `high` in a read-only sandbox. `--efforts` is an opt-in override, like `--models`, when a discussion needs a different effort (for example `xhigh` for a complex planning debate). The default is two of the same AI you're running in; use `--agents` only when you want a cross-model debate. Model selection has a single opt-in flag (`--models`) for reproducibility-sensitive use cases — defaults are the latest pinned version for each CLI. The tool is biased toward the best possible outcome, not configurability.
 
 ## How it works
 

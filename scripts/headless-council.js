@@ -112,8 +112,8 @@ const CLI_PROFILES = {
   claude: {
     name: "Claude",
     binary: "claude",
-    defaultModel: "claude-opus-5",
-    defaultEffort: "max",
+    defaultModel: "claude-opus-5-5",
+    defaultEffort: "high",
     efforts: ["low", "medium", "high", "xhigh", "max"],
     buildCmd: (promptFile, cwd, model, effort) => {
       const m = validateModel(model, "claude");
@@ -128,8 +128,8 @@ const CLI_PROFILES = {
   codex: {
     name: "Codex",
     binary: "codex",
-    defaultModel: "gpt-5.6-sol",
-    defaultEffort: "xhigh",
+    defaultModel: "gpt-6.2-astra",
+    defaultEffort: "high",
     efforts: ["low", "medium", "high", "xhigh", "max"],
     buildCmd: (promptFile, cwd, model, effort) => {
       const m = validateModel(model, "codex");
